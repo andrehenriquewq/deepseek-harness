@@ -135,6 +135,31 @@
   cursor: pointer;
 }
 
+/* Filter row above the grouped list. Sits outside `.groups` so it stays put
+   while the list scrolls under it. */
+.search {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.search::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.search:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
 .groups {
   min-height: 0;
   overflow-y: auto;
@@ -144,16 +169,59 @@
   margin-top: 4px;
 }
 
+/* The heading is the group's disclosure control: same caption tone as before,
+   now a full-width button carrying the chevron and the group's model count. */
 .groupTitle {
   position: sticky;
   top: 0;
   z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
   padding: 5px 8px 3px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
   background: var(--dsw-specific-menu);
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.groupTitle:hover,
+.groupTitle:focus-visible {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.groupChevron {
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+
+/* Folded points at the group it would open, matching the trigger's own
+   collapsed-chevron direction. */
+.groupChevronFolded {
+  transform: rotate(-90deg);
+}
+
+.groupName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How many models the group holds — the fact a folded group would otherwise
+   hide, and under a filter the number of matches. */
+.groupCount {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .option {

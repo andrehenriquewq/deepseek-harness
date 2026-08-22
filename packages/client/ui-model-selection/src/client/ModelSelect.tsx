@@ -10,6 +10,15 @@
  * from the Host rather than a client-owned vocabulary. A rejected selection
  * announces through the shared transient Toast anchored to the composer
  * card; the in-menu strip with Retry remains the catalog-load surface.
+ *
+ * The model pane carries a text filter above the grouped list, and each
+ * provider heading is a disclosure that folds its own models away. Both are
+ * display-only over the loaded directory and never re-query the Host, so it
+ * stays the one source of the offered set; a gateway route advertising
+ * hundreds of models is reachable without scrolling either way. The query
+ * lives only while the pane is open, while folding persists across visits, and
+ * an active query renders every matching group expanded so folding cannot hide
+ * a match.
  */
 import {
   useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
@@ -22,6 +31,7 @@ import {
   IconWarningOutline16, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ModelDirectoryState } from './directory.ts'
 import type { ModelSelectInjected } from './slots.ts'
 import css from './ModelSelect.module.css'
 
@@ -34,6 +44,34 @@ interface EffortChoice {
   effort: string | undefined
   label: string
   description?: string
+}
+
+/**
+ * Narrow the provider-grouped list to the entries a query names. Every
+ * whitespace-separated token must appear somewhere in one model's row —
+ * its own id, name, and description plus its group's id and name — so
+ * `claude opus` reaches `Anthropic: Claude Opus 4.5` and a provider name
+ * narrows to that route. Matching the id beside the display name is what
+ * makes a gateway model searchable by the id its docs use when the catalog
+ * renders a prettier name. A group whose models all drop out is omitted
+ * rather than left as a bare heading.
+ * @param groups - the directory's provider groups, in directory order.
+ * @param query - the raw filter text; blank returns `groups` unchanged.
+ * @returns the groups to render, each holding only its matching models.
+ */
+function filterGroups(
+  groups: ModelDirectoryState['groups'], query: string,
+): ModelDirectoryState['groups'] {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(token => token.length > 0)
+  if (tokens.length === 0) return groups
+  return groups.flatMap((group) => {
+    const models = group.models.filter((model) => {
+      const row = [group.id, group.name, model.id, model.name, model.description ?? '']
+        .join(' ').toLowerCase()
+      return tokens.every(token => row.includes(token))
+    })
+    return models.length === 0 ? [] : [{ ...group, models }]
+  })
 }
 
 /**
@@ -52,6 +90,11 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  const [query, setQuery] = useState('')
+  // Collapsed groups by id. Unlike the query, this survives leaving the pane:
+  // folding a 276-model route away is a standing preference about a noisy
+  // group, not a transient lookup, so re-opening the menu keeps it folded.
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -61,6 +104,7 @@ export function ModelSelect(
   const toastSeq = useRef(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const searchRef = useRef<HTMLInputElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
 
@@ -101,6 +145,19 @@ export function ModelSelect(
       })),
     ], [reasoning, t])
   const busy = state.status === 'selecting'
+  const visibleGroups = useMemo(() => filterGroups(state.groups, query), [state.groups, query])
+  // A query is a request to see what matches, so it overrides folding: a
+  // collapsed group hiding its own matches would answer the search with a
+  // silence the pane never explains.
+  const filtering = query.trim().length > 0
+
+  const toggleGroup = (groupId: string): void => {
+    setCollapsed((current) => {
+      const next = new Set(current)
+      if (!next.delete(groupId)) next.add(groupId)
+      return next
+    })
+  }
 
   const reload = (): void => {
     lastActionRef.current = 'load'
@@ -114,6 +171,15 @@ export function ModelSelect(
       load()
     }
   }, [available, load])
+
+  // The filter belongs to one visit of the model pane: entering it starts on
+  // the whole list with the box focused, and leaving it (or closing the menu)
+  // discards the query rather than hiding models behind a filter the next
+  // visit never shows.
+  useEffect(() => {
+    if (open && pane === 'model') searchRef.current?.focus()
+    else setQuery('')
+  }, [open, pane])
 
   useEffect(() => {
     if (!open) return
@@ -155,6 +221,14 @@ export function ModelSelect(
       return
     }
     if (!open) return
+    // From the filter box the list is below, so ArrowDown enters it at the
+    // first row. The generic wrap-around below starts from whichever item
+    // holds focus, and no item does while the caret is in the box.
+    if (event.key === 'ArrowDown' && event.target === searchRef.current) {
+      event.preventDefault()
+      itemRefs.current.find(item => item !== null)?.focus()
+      return
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       moveFocus(event.key === 'ArrowDown' ? 1 : -1)
@@ -283,44 +357,75 @@ export function ModelSelect(
                   <button type="button" className={css.retry} onClick={reload}>{t('retry')}</button>
                 </div>
               ))}
-              <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
+              <input
+                ref={searchRef}
+                type="search"
+                className={css.search}
+                value={query}
+                placeholder={t('search.placeholder')}
+                aria-label={t('search.aria')}
+                aria-controls={`${id}-groups`}
+                onChange={(event) => { setQuery(event.target.value) }}
+              />
+              <div id={`${id}-groups`} className={clsx(css.groups, 'scrollable')}>
+                {visibleGroups.map((group) => {
                   const headingId = `${id}-${group.id}`
+                  const folded = !filtering && collapsed.has(group.id)
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
-                      <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map((model) => {
-                        const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
-                          <button
-                            ref={itemRef()}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            className={clsx(css.option, selected && css.selected)}
-                            key={model.id}
-                            title={model.name}
-                            disabled={busy}
-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
-                          >
-                            <span className={css.optionCopy}>
-                              <span className={css.modelName}>{model.name}</span>
-                              {model.description !== undefined && (
-                                <span className={css.description}>{model.description}</span>
-                              )}
-                            </span>
-                            <span className={css.check}>
-                              {selected ? <IconCheckOutline16 /> : null}
-                            </span>
-                          </button>
-                        )
-                      })}
+                      <button
+                        ref={itemRef()}
+                        type="button"
+                        role="menuitem"
+                        id={headingId}
+                        className={css.groupTitle}
+                        aria-expanded={!folded}
+                        aria-controls={`${headingId}-models`}
+                        onClick={() => { toggleGroup(group.id) }}
+                      >
+                        <IconChevronDownOutline14
+                          className={clsx(css.groupChevron, folded && css.groupChevronFolded)}
+                        />
+                        <span className={css.groupName}>{group.name}</span>
+                        <span className={css.groupCount}>{group.models.length}</span>
+                      </button>
+                      <div id={`${headingId}-models`}>
+                        {folded ? null : group.models.map((model) => {
+                          const selected = state.current?.provider === group.id && state.current.model === model.id
+                          return (
+                            <button
+                              ref={itemRef()}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={selected}
+                              className={clsx(css.option, selected && css.selected)}
+                              key={model.id}
+                              title={model.name}
+                              disabled={busy}
+                              onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                            >
+                              <span className={css.optionCopy}>
+                                <span className={css.modelName}>{model.name}</span>
+                                {model.description !== undefined && (
+                                  <span className={css.description}>{model.description}</span>
+                                )}
+                              </span>
+                              <span className={css.check}>
+                                {selected ? <IconCheckOutline16 /> : null}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </section>
                   )
                 })}
               </div>
               {state.status === 'ready' && choices.length === 0 && (
                 <div className={css.empty}>{t('empty.models')}</div>
+              )}
+              {choices.length > 0 && visibleGroups.length === 0 && (
+                <div className={css.empty}>{t('empty.search', { query: query.trim() })}</div>
               )}
             </>
           )}

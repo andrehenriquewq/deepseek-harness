@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-模型选择插件（浏览器侧）：**两个入口共用一份会话级目录**，由 `ModelDirectoryResolver`（`ctx.modelDirectories`）持有。对于普通会话，`/model` popupSelect 贡献项（经 `ctx.commandUi` 注册）与 composer 的具名 `conversation.input.model` slot 都通过同一个 `ModelDirectory` 实例，经 `session.models` 加载会话的建议目录，并经 `session.selectModel` 提交。紧凑型 composer 触发器会打开两级 Model/Effort 菜单：模型仍按提供方分组，所选具体模型则提供由其适配器持有的推理强度名称、说明和默认值。`/model` 应用所选模型的默认推理强度，composer 随后可以选择任一已公布的推理强度。
+模型选择插件（浏览器侧）：**两个入口共用一份会话级目录**，由 `ModelDirectoryResolver`（`ctx.modelDirectories`）持有。对于普通会话，`/model` popupSelect 贡献项（经 `ctx.commandUi` 注册）与 composer 的具名 `conversation.input.model` slot 都通过同一个 `ModelDirectory` 实例，经 `session.models` 加载会话的建议目录，并经 `session.selectModel` 提交。紧凑型 composer 触发器会打开两级 Model/Effort 菜单：模型仍按提供方分组，所选具体模型则提供由其适配器持有的推理强度名称、说明和默认值。`/model` 应用所选模型的默认推理强度，composer 随后可以选择任一已公布的推理强度。模型列表带有文本筛选：以空白分隔的每个词都必须命中同一行——匹配范围包括提供方的 id 与名称，以及模型的 id、名称和说明——因此即使目录渲染的是更好看的名称，模型仍可用其提供方文档里的 id 找到；某个分组若无任何匹配，其标题也一并隐藏。筛选只收窄当前打开面板的渲染内容，不会重新向宿主发起查询，已公布集合保持不变；查询词仅在该面板打开期间存在。每个提供方标题同时也是该分组的展开／折叠控件：按下即折叠该分组的模型并显示其所含数量，标题也加入方向键顺序；折叠会在离开面板后存活，因为把一条吵闹的路由收起来是长期偏好而非一次查找。查询生效时，所有匹配分组一律展开渲染——只忽略折叠而不清除它——因此搜索绝不会给出一个被自己藏起来的匹配。
 
 Host 报告的 `ModelSelection` 是唯一的选择事实，其中包含提供方、模型与推理（reasoning）强度；但只有当该提供方／模型对仍在已公布分组中时才会回显。目录行缺席时，可路由的选择保持不变，但触发器会提示 `Select model`；系统不会合成陈旧行，且在用户选择已公布的模型之前不会显示 Effort 行。目录加载与选择共享一个代次计数器，旧响应不会覆盖新结果；连接重置会丢弃所有常驻目录投影，并在显示前重新拉取 Host 恢复的选择。各提供方的元数据获取失败会内联列出，同时可用分组仍可选择；选择失败会保留先前的选择和目录。
 
