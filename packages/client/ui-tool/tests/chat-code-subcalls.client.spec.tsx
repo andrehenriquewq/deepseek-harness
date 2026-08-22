@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Code Mode sub-call acceptance on the REAL machinery stack (same bench as
 // chat-toolview-slot.spec): a run_code result renders the 'code' variant row
-// (description summary, program body), its logged sub-dispatches render as
+// (first program line summary, complete program body), its logged sub-dispatches render as
 // always-visible nested rows through the SAME keyed toolview hole — the bash
 // sub-call lands in the bash sample plugin's registration exactly like a
 // top-level bash row, unregistered sub-tools fall back to GenericToolCard —
@@ -45,8 +45,8 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 })
 
-const PROGRAM = 'const listing = await tools.bash({ command: "ls notes", description: "List notes" })\nreturn listing'
-const RUN_CODE_ARGS = JSON.stringify({ code: PROGRAM, description: 'List the notes directory' })
+const PROGRAM = 'const listing = await tools.bash({ command: "ls notes" })\nreturn listing'
+const RUN_CODE_ARGS = JSON.stringify({ code: PROGRAM })
 
 const codeResult = (seq: number, callId: string): ToolResultNode => ({
   kind: 'tool-result', seq, time: seq * 1_000, callId,
@@ -191,30 +191,30 @@ function mountApp(slots: SlotRegistry) {
 }
 
 describe('run_code sub-calls through the real chat machinery', () => {
-  it('renders the code-variant parent row with the description summary and nested sub-rows', async () => {
+  it('renders the code-variant parent row with the first program line and nested sub-rows', async () => {
     const parent = 'call-64'
     const subCalls = [
-      subCall(11, parent, 1, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
+      subCall(11, parent, 1, 'bash', { command: 'ls notes' }, 'demo.txt'),
       subCall(12, parent, 2, 'mystery', { n: 1 }, 'ok'),
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.slots)
 
-    // Parent row: the code variant with the model-authored description.
+    // Parent row: the code variant derives its summary from the program.
     const codeRoot = view.container.querySelector('[data-variant="code"]')
     expect(codeRoot).not.toBeNull()
     expect(view.getByText('Code')).toBeTruthy()
-    expect(view.getByText('List the notes directory')).toBeTruthy()
+    expect(view.getByText('const listing = await tools.bash({ command: "ls notes" })')).toBeTruthy()
 
     // Nested rows are ALWAYS visible (no parent expand needed): the bash
     // sub-call landed in the bash sample plugin's keyed registration — Bash ·
-    // description chrome, same as a top-level bash row — and the unregistered
+    // command, same as a top-level bash row — and the unregistered
     // sub-tool fell back to GenericToolCard at the same render site.
     const nest = view.container.querySelector('[data-subcalls]')
     expect(nest).not.toBeNull()
     expect(nest!.querySelector('[data-sample="bash"]')).not.toBeNull()
     expect(view.getByText('Bash')).toBeTruthy()
-    expect(view.getByText('List notes')).toBeTruthy()
+    expect(view.getByText('ls notes')).toBeTruthy()
     expect(view.getByText('Tool call')).toBeTruthy()
   })
 
@@ -270,7 +270,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     const parent = 'call-64'
     const subCalls = [
       subCall(11, parent, 1, 'read', { path: 'notes/demo.txt' }, 'ok'),
-      subCall(12, parent, 2, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
+      subCall(12, parent, 2, 'bash', { command: 'ls notes' }, 'demo.txt'),
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.slots)
@@ -279,14 +279,14 @@ describe('run_code sub-calls through the real chat machinery', () => {
     await vi.waitFor(() => {
       expect(b.workspaces.openPath).toHaveBeenCalledWith('notes/demo.txt')
     })
-    view.getByText('List notes').click()
+    view.getByText('ls notes').click()
     expect(b.layout.openDetails).not.toHaveBeenCalled()
   })
 
   it('a RUNNING run_code call nests its so-far dispatches under the spinner row', async () => {
     const parent = 'call-live'
     const subCalls = [
-      subCall(21, parent, 1, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt'),
+      subCall(21, parent, 1, 'bash', { command: 'ls notes' }, 'demo.txt'),
     ]
     const b = await bench(snapshotWith([], subCalls, [runningCode(parent)]))
     const view = mountApp(b.slots)

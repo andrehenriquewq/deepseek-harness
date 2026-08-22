@@ -103,8 +103,8 @@ describe('web e2e: Code Mode round renders nested sub-calls', () => {
   it.skipIf(MODE === 'record')('renders the code parent row with always-visible nested sub-rows', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-code-mode-rows'))
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
-    // The parent run_code row wears the code variant with the model-authored
-    // description as its summary (the presentCall contract).
+    // The parent run_code row wears the code variant with the program's first
+    // non-blank line as its summary (the presentCall contract).
     const codeRow = page.locator('[data-variant="code"]').first()
     await codeRow.waitFor({ timeout: 10_000 })
     // Nested rows are visible WITHOUT any expand interaction, inside the

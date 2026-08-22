@@ -24,9 +24,13 @@ When the only violations are missing required properties and the arguments carry
 
 Echoing the model's own summary is the point. The model had already chosen what to do; the violation list alone does not tell it that the choice survived, so it starts over instead of finishing.
 
-### `description` is optional on `bash`, `pwsh`, and `run_code`
+### `description` is gone from `bash`, `pwsh`, and `run_code`
 
-The field stays in the schema — it is the card label — but a call carrying the payload alone now runs. The inverse stub is real: the model also emits `code` without `description` and was being rejected for the missing label, which is a failure the harness was inventing for itself. The bash card omits the description slot when absent; the `run_code` card falls back to the program's first non-blank line, mirroring the bash card's use of the command itself.
+The field is removed from the parameter schema AND from every prose that named it — the tool description and the Code Mode SDK section, in both language flavors. Optional is not enough: a field the model can see is a field it will fill, and filling it is where it stops.
+
+The card label follows the command instead. The bash and pwsh cards already titled themselves with the command; the `run_code` card now takes the program's first non-blank line, elided.
+
+This reverses the required-`description` decision recorded in the [Code Mode UI foundation](../feature/2026-07-26-code-dispatch-ui-foundation.md) and in the tests this change replaces. The field was made required, and named in the prose, precisely so a model would not emit `{code}` alone and fail. That cure produced this disease: the model started emitting the summary alone instead. With the field gone, `{code}` alone is the correct call and neither stub has anywhere to land.
 
 ### The repeat chain compares what a call does
 
@@ -34,28 +38,40 @@ The field stays in the schema — it is the card label — but a call carrying t
 
 ## Evidence
 
-Measured live against `gemini-3.7-flash-high` through the same gateway, across all four presets:
+Measured live against `gemini-3.7-flash-high` through the same gateway. The repair directive and the guard change were measured first, with `description` still present:
 
-| | before | after |
+| | before | with the directive |
 |---|---|---|
 | stub recovered on the next call | 35% (n=107) | 68% (21/31) |
 | turns reaching an answer | died in runs of up to 11 | 6 of 6 |
 
-Stub emission itself is unchanged, as expected: none of this stops the model producing stubs. `Minimal` mode emitted none at all in 3 calls — its `bash` is `tool-bash-persistent`, whose schema is only `{command}` — but 3 calls prove nothing on their own.
+Removing the field then eliminated the stub outright:
+
+| preset | tool | with the field | without it |
+|---|---|---|---|
+| PTC | `run_code` | 91% (10/11) | **0% (0/13)** |
+| Standard | `bash` | 35% (12/34) | **0% (0/11)** |
+| Minimal | `bash` (never had it) | — | **0% (0/16)** |
+
+Forty consecutive calls carried their payload. The directive and the guard change stay: they cover every other tool that still declares a summary field, and any model that stubs for another reason.
 
 ## Consequences
 
-`description` is no longer required on `bash`, `pwsh`, or `run_code`. Any composition that read it as guaranteed must treat it as absent-able: the two shell cards omit the description slot and `run_code` derives its title from the program. Logged calls from before this change still carry the field and replay unchanged.
+`description` no longer exists on `bash`, `pwsh`, or `run_code`. A composition that read it is reading a field no call carries: the two shell cards title themselves with the command and `run_code` derives its title from the program. Logged calls from before this change still carry the field; presentation ignores it and replay is unaffected.
+
+The transcript loses the model-authored one-line summary on shell and code calls. What a reader sees is the command itself, which is more literal and less curated.
 
 `ToolArgsError.message` now varies with the arguments for one violation shape. Anything asserting on the exact text of a missing-required-property failure sees the appended directive; `violations` and the `INVALID_ARGS` code are untouched, so policy and routing that read the structured error are unaffected.
 
 The repeat guard counts differently. A deployment that relied on a relabelled repeat resetting the chain now draws reminders sooner, and `ignoredArgumentKeys: []` restores the previous key exactly. A tool whose `description` genuinely changes behavior would be mis-chained by the default and must name itself in `exclude` or clear the key list.
 
-The stub itself still reaches the model as a failed call and still costs an agent step. Making it invisible needs the forced-tool retry recorded under Alternatives.
+`subagent` and `subagent_fork` still declare a required `description` beside their payload and were left alone: they are dispatch tools whose summary is the subagent's own label, not decoration. They remain exposed to the stub, and the repair directive is what covers them.
 
 ## Alternatives considered
 
-**Removing `description` from the schema entirely.** Implemented, measured, and reverted. The correlation that motivated it was real — only tools declaring a `description` broke, and `read`/`skill`/`ask_user_question` never did — but the causality was backwards. With the field gone from the schema the model still emitted `description` in 7 of 8 calls and still omitted the payload at the same rate. The habit is the model's, not the schema's. Removing the field would have cost the card label for every model to buy nothing.
+**Leaving `description` in the schema but optional.** Measured and rejected: `run_code` still stubbed on 91% of calls with the field optional and the prompt corrected. A field the model can see is a field it will fill, and filling it is where it stops.
+
+**An earlier reading of the same experiment.** A first attempt removed the field from the schema only, left every prose mention in place, and concluded from the model still emitting `description` that the habit was the model's rather than the schema's. That conclusion was wrong: the model was obeying the system prompt, which still named the field as required. The corrected experiment — field absent from schema and prose together — is the 40-for-40 result above. Recorded because the confounded version looked conclusive.
 
 **Blaming the gateway's stream aggregation.** Ruled out by replaying one captured request directly against the gateway with `stream: true` and `stream: false`, three times each: stubs appeared at the same rate on both transports. The model closes the JSON early; nothing downstream is dropping deltas.
 

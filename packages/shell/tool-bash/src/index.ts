@@ -44,7 +44,6 @@ export const Config: z<Config> = z.object({
 /** Parsed tool args; execute validates value constraints absent from ParameterSchemaSpec. */
 interface BashToolArgs {
   command: string
-  description?: string
   timeoutMs?: number
   workdir?: string
   run_in_background?: boolean
@@ -55,9 +54,6 @@ interface BashToolArgs {
 function validateBashArgs(args: BashToolArgs): void {
   if (args.command.trim().length === 0) {
     throw new Error('invalid command: expected a non-empty string')
-  }
-  if (args.description !== undefined && args.description.trim().length === 0) {
-    throw new Error('invalid description: expected a non-empty string')
   }
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
     throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
@@ -97,7 +93,7 @@ function bashDescription(backgroundEnabled: boolean, escalationModes: readonly S
  * The command remains the title on both paths; foreground cwd is passed through
  * for the bridge to resolve, while background descriptions remain card content.
  */
-type BashCallArgs = { command: string; description?: string; workdir?: string; run_in_background?: boolean }
+type BashCallArgs = { command: string; workdir?: string; run_in_background?: boolean }
 
 function presentBashCall(args: BashCallArgs): GenericCallView | TerminalCallView {
   if (args.run_in_background === true) {
@@ -106,13 +102,11 @@ function presentBashCall(args: BashCallArgs): GenericCallView | TerminalCallView
       title: args.command,
       kind: 'execute',
       rawInput: args.command,
-      ...args.description === undefined ? {} : { content: [{ type: 'text' as const, text: args.description }] },
     }
   }
   return {
     card: 'terminal',
     title: args.command,
-    ...args.description === undefined ? {} : { description: args.description },
     ...args.workdir !== undefined ? { cwd: args.workdir } : {},
   }
 }
@@ -244,12 +238,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     description: bashDescription(backgroundEnabled, escalationModes),
     parameters: {
       command: { type: 'string', required: true, description: 'The bash command to execute.' },
-      description: {
-        type: 'string',
-        description: 'Clear, concise description of what this command does in active voice, '
-          + '5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; '
-          + '"git status" → "Show working tree status"; "npm install" → "Install package dependencies".',
-      },
       timeoutMs: { type: 'number', description: 'Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry.' },
       workdir: { type: 'string', description: 'Working directory for this command. Defaults to the session workspace; a relative path is resolved against it.' },
       ...backgroundEnabled ? {

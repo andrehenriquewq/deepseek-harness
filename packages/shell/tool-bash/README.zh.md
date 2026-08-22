@@ -17,7 +17,6 @@
 | 参数 | 类型 | 说明 |
 |---|---|---|
 | `command` | string（必填） | 通过 `bash -c` 运行。调用之间不保留状态；请使用 `workdir`，不要使用 `cd`。 |
-| `description` | string | 用一行主动语态概述命令（5～10 个词），仅用于 UI／日志显示，不影响执行。可选：只发出命令、不带摘要的模型同样能执行，卡片会退回到命令本身。 |
 | `timeoutMs` | number | 以毫秒为单位覆盖超时时间。执行器会应用其配置的默认值和上限。 |
 | `workdir` | string | 本次调用的工作目录。默认为调用方 agent（智能体）会话 cwd 的文件系统标识（`session.header.cwd`），使每个会话都在自己的工作区中运行；相对 `workdir` 也以同一标识为基准解析。 |
 | `run_in_background` | boolean | 立即返回 job id；不应用超时。 |
@@ -38,7 +37,7 @@
 
 ## UI 展示
 
-工具持有自己的 `presentCall`/`presentResult` 渲染意图。前台调用是终端卡片，包含命令、说明、cwd、输出和解析后的退出状态。由于卡片以独立的 pill 展示退出状态，解析所消耗的 `[exit code: N]` / `[killed by signal: …]` 标记会从输出中移除；其他所有标记（截断、超时、沙箱）都保留在输出中。后台启动只返回 job id，因此使用通用执行卡片；通用 `job_*` 工具持有各自的卡片。这些 presenter 是纯函数，可安全回放。
+工具持有自己的 `presentCall`/`presentResult` 渲染意图。前台调用是终端卡片，包含命令、cwd、输出和解析后的退出状态。由于卡片以独立的 pill 展示退出状态，解析所消耗的 `[exit code: N]` / `[killed by signal: …]` 标记会从输出中移除；其他所有标记（截断、超时、沙箱）都保留在输出中。后台启动只返回 job id，因此使用通用执行卡片；通用 `job_*` 工具持有各自的卡片。这些 presenter 是纯函数，可安全回放。
 
 ## 工具仅使用具名参数构建请求
 
@@ -122,7 +121,7 @@ renderer 先输出依数据而定的 stdout 尾部，再输出可选的 `[stderr
 
 #### 模型看到的内容
 
-验证和策略失败统一为 `Error: <message>`。此包的稳定消息包括 `invalid command: expected a non-empty string`、`invalid description: expected a non-empty string`、`invalid timeoutMs: expected a positive number, got <value>`、`invalid escalation: sandbox_permissions requires a justification`、`invalid escalation: justification is only valid together with sandbox_permissions`、`invalid justification: expected a non-empty sentence`、`background execution is disabled for this bash tool`、`background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs`、`sandbox_permissions is not available in this composition (no sandboxing executor to escalate)`、`sandbox escalation to "<mode>" is not strictly wider than this call's current "<mode>" mode`、审批不可用／拒绝／取消变体，以及 `tool call aborted`。
+验证和策略失败统一为 `Error: <message>`。此包的稳定消息包括 `invalid command: expected a non-empty string`、`invalid timeoutMs: expected a positive number, got <value>`、`invalid escalation: sandbox_permissions requires a justification`、`invalid escalation: justification is only valid together with sandbox_permissions`、`invalid justification: expected a non-empty sentence`、`background execution is disabled for this bash tool`、`background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs`、`sandbox_permissions is not available in this composition (no sandboxing executor to escalate)`、`sandbox escalation to "<mode>" is not strictly wider than this call's current "<mode>" mode`、审批不可用／拒绝／取消变体，以及 `tool call aborted`。
 
 #### Token 影响
 

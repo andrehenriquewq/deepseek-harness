@@ -453,11 +453,11 @@ function buildAlphaLog(): SessionEvent[] {
   {
     const turn = 65
     const callId = `fx-call-${turn}`
-    const program = 'const listing = await tools.bash({ command: "ls notes", description: "List notes" })\n'
+    const program = 'const listing = await tools.bash({ command: "ls notes" })\n'
       + 'const demo = await tools.read({ file_path: "notes/demo.txt" })\n'
       + 'await tools.read({ file_path: "notes/missing.txt" }).catch(() => "tolerated")\n'
       + 'return { listing, demo }'
-    const args = JSON.stringify({ code: program, description: 'Read the notes files and summarize' })
+    const args = JSON.stringify({ code: program })
     push({ type: 'turn/start', data: { turn } })
     push({ type: 'user/message', surfaceOp: 'append', data: userMessage(text(`问题 ${turn}：run_code 样本。`)) })
     push({ type: 'step/start', data: { turn, step: 0 } })
@@ -479,7 +479,7 @@ function buildAlphaLog(): SessionEvent[] {
         },
       })
     }
-    dispatchPair(1, 'bash', { command: 'ls notes', description: 'List notes' }, 'demo.txt\nnew-demo.txt')
+    dispatchPair(1, 'bash', { command: 'ls notes' }, 'demo.txt\nnew-demo.txt')
     dispatchPair(2, 'read', { file_path: 'notes/demo.txt' }, 'hello fixture\n')
     dispatchPair(3, 'read', { file_path: 'notes/missing.txt' }, 'Error: ENOENT: notes/missing.txt not found', true)
     push({

@@ -126,7 +126,7 @@ ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类�
 
 ### `run_code`
 
-针对可用工具执行 TypeScript 程序。接受一个必填参数 `code`，即异步函数的**函数体**（仅使用可擦除语法；支持顶层 `await` 和 `return`）；以及可选的 `description`，简要说明该程序做什么。请根据系统提示词中的声明，以 `await tools.name(args)` 形式调用工具。只有打印或返回的内容属于程序输出，请谨慎筛选。含图片的子工具结果会在运行结束后附加。
+针对可用工具执行 TypeScript 程序。接受一个必填参数 `code`，即异步函数的**函数体**（仅使用可擦除语法；支持顶层 `await` 和 `return`）。请根据系统提示词中的声明，以 `await tools.name(args)` 形式调用工具。只有打印或返回的内容属于程序输出，请谨慎筛选。含图片的子工具结果会在运行结束后附加。
 
 ```json
 {
@@ -135,10 +135,6 @@ ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类�
     "code": {
       "type": "string",
       "description": "The program: the body of an async TypeScript function."
-    },
-    "description": {
-      "type": "string",
-      "description": "Clear, concise description of what this program does in active voice, 5-10 words (shown in the UI). Examples: \"Count TODO markers across packages\"; \"Read failing test and its fixture\"; \"Rename config key in every cordis.yml\"."
     }
   },
   "required": [
@@ -194,10 +190,6 @@ ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类�
       "type": "string",
       "description": "The bash command to execute."
     },
-    "description": {
-      "type": "string",
-      "description": "Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: \"ls\" → \"List files in current directory\"; \"git status\" → \"Show working tree status\"; \"npm install\" → \"Install package dependencies\"."
-    },
     "timeoutMs": {
       "type": "number",
       "description": "Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry."
@@ -236,10 +228,6 @@ bash 工具是 bash 执行器 seam 面向模型的消费方。使用 `run_in_bac
     "command": {
       "type": "string",
       "description": "The PowerShell command to execute."
-    },
-    "description": {
-      "type": "string",
-      "description": "Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: \"ls\" → \"List files in current directory\"; \"git status\" → \"Show working tree status\"; \"Get-Process\" → \"List running processes\"."
     },
     "timeoutMs": {
       "type": "number",

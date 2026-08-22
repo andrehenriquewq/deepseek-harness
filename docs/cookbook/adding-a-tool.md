@@ -72,7 +72,7 @@ Both methods return a **`card`-tagged render intent** — pick the card kind tha
 
 - `presentCall(args)` → a `ToolCallView` (the PENDING card):
   - `{ card: 'generic', title, kind?, rawInput?, content?, locations? }` — the default. Set `kind` for an icon (`read`/`search`/…); set `locations: [{ path, line? }]` for any file your tool touches so a capable editor follows along / jumps to it.
-  - `{ card: 'terminal', title, description?, cwd? }` — your call IS a shell command. `title` is the command, `description` renders above the terminal card. (tool-bash.)
+  - `{ card: 'terminal', title, description?, cwd? }` — your call IS a shell command. `title` is the command; when present, `description` renders above the terminal card.
   - `{ card: 'diff', title, diffs, locations? }` — your call creates or modifies a file. `diffs: [{ path, oldText, newText }]` (`oldText: null` for a new file) renders as an inline diff card. (tool-fs `write`/`edit`.)
 - `presentResult(args, { content, isError, meta? })` returns the completed card:
   - `generic` supplies an optional title and content.

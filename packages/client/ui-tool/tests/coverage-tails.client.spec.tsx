@@ -67,7 +67,7 @@ describe('Tool presentation tails', () => {
     expect(view.container.querySelector('[data-state="ok"]')).not.toBeNull()
   })
 
-  it('BashRow summarizes the description without a row click target', () => {
+  it('BashRow summarizes the command without a row click target', () => {
     const settled: ToolResultNode = {
       kind: 'tool-result', seq: 3, time: 3_000, callId: 'c1',
       call: { name: 'bash', argsRaw: '{"command":"make build","description":"Build"}' },
@@ -77,7 +77,7 @@ describe('Tool presentation tails', () => {
     const view = render(<BashRow {...bashProps(settled)} />)
     const row = view.container.querySelector('[data-sample="bash"]')!
     expect(row.textContent).toContain('Bash')
-    expect(row.textContent).toContain('Build')
+    expect(row.textContent).toContain('make build')
     expect(row.getAttribute('data-clickable')).toBeNull()
   })
 
@@ -100,7 +100,7 @@ describe('Tool presentation tails', () => {
     const runningView = render(<BashRow {...bashProps(running)} />)
     expect(runningView.container.querySelector('[data-state="running"]')).not.toBeNull()
     expect(runningView.getByText('Bash')).toBeTruthy()
-    expect(runningView.getByText('List')).toBeTruthy()
+    expect(runningView.getByText('ls')).toBeTruthy()
     runningView.unmount()
 
     const errorView = render(<BashRow {...bashProps(errorResult)} />)

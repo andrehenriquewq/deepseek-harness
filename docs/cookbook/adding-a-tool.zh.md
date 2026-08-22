@@ -74,7 +74,7 @@ producer 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 
 
 - `presentCall(args)` → 一个 `ToolCallView`（PENDING 卡片）：
   - `{ card: 'generic', title, kind?, rawInput?, content?, locations? }`——默认。设置 `kind` 获取图标（`read`／`search`／…）；设置 `locations: [{ path, line? }]` 标注工具涉及的文件，使有能力的编辑器跟随／跳转。
-  - `{ card: 'terminal', title, description?, cwd? }`——你的调用本身就是 shell 命令。`title` 是命令，`description` 渲染在终端卡片上方。（tool-bash。）
+  - `{ card: 'terminal', title, description?, cwd? }`——你的调用本身就是 shell 命令。`title` 是命令；存在时，`description` 渲染在终端卡片上方。
   - `{ card: 'diff', title, diffs, locations? }`——你的调用创建或修改文件。`diffs: [{ path, oldText, newText }]`（新文件时 `oldText: null`）渲染为内联 diff 卡片。（tool-fs `write`／`edit`。）
 - `presentResult(args, { content, isError, meta? })` 返回完成后的卡片：
   - `generic` 提供可选的标题和内容。

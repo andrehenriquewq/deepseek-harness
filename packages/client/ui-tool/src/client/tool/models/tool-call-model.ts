@@ -141,12 +141,12 @@ function pickString(args: Record<string, unknown>, keys: readonly string[]): str
 
 /** Summary key preference per variant (args-derived; result-derived summaries are a ledger item). */
 const SUMMARY_KEYS: Record<ToolRowVariant, readonly string[]> = {
-  bash: ['description', 'command'],
+  bash: ['command'],
   read: ['path', 'file_path', 'url'],
   search: ['query', 'pattern', 'url'],
   write: ['path', 'file_path'],
   edit: ['path', 'file_path'],
-  code: ['description'],
+  code: ['code'],
   others: [],
 }
 

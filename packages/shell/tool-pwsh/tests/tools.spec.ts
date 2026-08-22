@@ -307,7 +307,6 @@ describe('registration', () => {
     expect(schema?.description).toContain('PowerShell command')
     expect(schema?.parameters.properties).toMatchObject({
       command: { type: 'string' },
-      description: { type: 'string' },
       timeoutMs: { type: 'number' },
       workdir: { type: 'string' },
       run_in_background: { type: 'boolean' },
@@ -340,11 +339,10 @@ describe('registration', () => {
 })
 
 describe('argument validation', () => {
-  it('rejects a blank command or description and a non-positive timeoutMs', async () => {
+  it('rejects a blank command and a non-positive timeoutMs', async () => {
     const { ctx } = await setup()
-    expect(text(await call(ctx, 'pwsh', { command: '  ', description: 'd' }))).toContain('expected a non-empty string')
-    expect(text(await call(ctx, 'pwsh', { command: 'Write-Output hi', description: ' ' }))).toContain('expected a non-empty string')
-    expect(text(await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'd', timeoutMs: -1 })))
+    expect(text(await call(ctx, 'pwsh', { command: '  ' }))).toContain('expected a non-empty string')
+    expect(text(await call(ctx, 'pwsh', { command: 'Write-Output hi', timeoutMs: -1 })))
       .toContain('invalid timeoutMs: expected a positive number')
   })
 })
@@ -787,15 +785,15 @@ describe('background execution through the job runtime', () => {
     const { ctx } = await setup({ enableRunInBackground: false })
     const schema = ctx.tools.schemas().find(s => s.name === 'pwsh')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
-      .toEqual(['command', 'description', 'timeoutMs', 'workdir'])
+      .toEqual(['command', 'timeoutMs', 'workdir'])
     expect(schema.description).toContain('Background execution is not available')
     expect(schema.description).not.toContain('run_in_background')
 
     // Schema omission is advertising; execution must also enforce the opt-out.
-    const forced = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'test command', run_in_background: true })
+    const forced = await call(ctx, 'pwsh', { command: 'Write-Output hi', run_in_background: true })
     expect(forced.isError).toBe(true)
     expect(text(forced)).toContain('run_in_background is disabled for this deployment')
-    const foreground = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'test command' })
+    const foreground = await call(ctx, 'pwsh', { command: 'Write-Output hi' })
     expect(foreground.isError).toBe(false)
   })
 
@@ -827,12 +825,12 @@ describe('UI presentation', () => {
     expect(view).toEqual({ card: 'terminal', output: 'hi\n', exitCode: 0 })
   })
 
-  it('the pending call view is a terminal card carrying command, description, and optional cwd', async () => {
+  it('the pending call view is a terminal card carrying command and optional cwd', async () => {
     const { ctx } = await setup()
     const definition = ctx.tools.get('pwsh')
-    expect(definition?.presentCall?.({ command: 'Get-Process', description: 'List processes' }))
-      .toEqual({ card: 'terminal', title: 'Get-Process', description: 'List processes' })
-    expect(definition?.presentCall?.({ command: 'Get-Process', description: 'List processes', workdir: 'C:\\work' }))
+    expect(definition?.presentCall?.({ command: 'Get-Process' }))
+      .toEqual({ card: 'terminal', title: 'Get-Process' })
+    expect(definition?.presentCall?.({ command: 'Get-Process', workdir: 'C:\\work' }))
       .toMatchObject({ cwd: 'C:\\work' })
   })
 
@@ -841,14 +839,12 @@ describe('UI presentation', () => {
     const definition = ctx.tools.get('pwsh')
     expect(definition?.presentCall?.({
       command: 'Start-Sleep -Seconds 60',
-      description: 'long wait',
       run_in_background: true,
     })).toEqual({
       card: 'generic',
       title: 'Start-Sleep -Seconds 60',
       kind: 'execute',
       rawInput: 'Start-Sleep -Seconds 60',
-      content: [{ type: 'text', text: 'long wait' }],
     })
   })
 

@@ -399,10 +399,11 @@ describe('mode-aware wire contribution', () => {
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a TypeScript program')
     expect(runCodeSchema?.description).toContain('BODY of an')
-    // Both required arguments are named here, not only in the parameter
-    // schema: prose that describes the call as "pass the program" is what
-    // leads a model to emit `{code}` alone and fail INVALID_ARGS.
-    expect(runCodeSchema?.description).toContain('`description`')
+    // The prose names the ONE argument the call takes. A `description`
+    // parameter used to be named here so a model would not emit `{code}`
+    // alone; the parameter is gone, so `{code}` alone is now the correct call
+    // and naming a summary field would only invite the reverse stub.
+    expect(runCodeSchema?.description).not.toContain('`description`')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
     expect(codeParam.description).toBe('The program: the body of an async TypeScript function.')
   })
@@ -414,7 +415,7 @@ describe('mode-aware wire contribution', () => {
     const runCodeSchema = assembly.tools.find(tool => tool.name === RUN_CODE_NAME)
     expect(runCodeSchema?.description).toContain('Execute a Python program')
     expect(runCodeSchema?.description).toContain('`return <value>`')
-    expect(runCodeSchema?.description).toContain('`description`')
+    expect(runCodeSchema?.description).not.toContain('`description`')
     expect(runCodeSchema?.description).not.toContain('TypeScript')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
     expect(codeParam.description).toBe('The program: the body of an async Python function.')
@@ -1294,34 +1295,25 @@ describe('the run_code dispatch bridge', () => {
     expect((result.content[0] as { text: string }).text).toContain('requires a code runtime')
   })
 
-  it('presents the model-authored description as the execute-card title over the program input', async () => {
+  it("presents the program's first line as the execute-card title over the program input", async () => {
     const { ctx } = await setup({ mode: 'code' })
     const tool = ctx.tools.get(RUN_CODE_NAME)!
-    // The description labels the card (the bash description precedent); the
-    // program itself remains the expanded raw input.
-    expect(tool.presentCall?.({ code: 'return 1', description: 'Return the constant one' })).toEqual({
+    // The call carries no summary field at all, so the first line labels the
+    // card, exactly as the bash card uses the command itself.
+    expect(tool.presentCall?.({ code: 'return 1' })).toEqual({
       card: 'generic',
-      title: 'Return the constant one',
+      title: 'return 1',
       kind: 'execute',
       rawInput: 'return 1',
     })
   })
 
-  it("falls back to the program's first line as the card title when the model sent no description", async () => {
+  it('elides a first line too long to serve as a card title', async () => {
     const { ctx } = await setup({ mode: 'code' })
     const tool = ctx.tools.get(RUN_CODE_NAME)!
-    expect(tool.presentCall?.({ code: '\n  const x = 1\nreturn x' })).toMatchObject({ title: 'const x = 1' })
-    expect(tool.presentCall?.({ code: '   \n\t\n' })).toMatchObject({ title: RUN_CODE_NAME })
-    const long = tool.presentCall?.({ code: `const label = '${'y'.repeat(90)}'` }) as { title: string }
-    expect(long.title).toHaveLength(72)
-    expect(long.title.endsWith('\u2026')).toBe(true)
-  })
-
-  it('rejects a whitespace-only description with a structured isError', async () => {
-    const { ctx } = await setup({ mode: 'code' })
-    const result = await runCode(ctx, 'return 1', { description: '   ' })
-    expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toContain('invalid description')
+    const view = tool.presentCall?.({ code: `const label = '${'y'.repeat(90)}'` }) as { title: string }
+    expect(view.title).toHaveLength(72)
+    expect(view.title.endsWith('\u2026')).toBe(true)
   })
 
   it.each([

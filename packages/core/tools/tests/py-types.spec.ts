@@ -166,12 +166,13 @@ describe('renderToolsSdkPy', () => {
     expect(text).toContain('tools: Tools')
   })
 
-  it('names both required call arguments, not just the program', () => {
-    // The schema requires `code` AND `description`; instructions that mention
-    // only the program let a model emit `{code}` alone and fail INVALID_ARGS.
+  it('names the one call argument and no summary field', () => {
+    // The call takes `code` alone. A `description` argument was named here so a
+    // model would not emit `{code}` alone; it no longer exists, and naming it
+    // would invite the reverse stub — a summary with no program.
     const text = renderToolsSdkPy([bash])
     expect(text).toContain('`code`')
-    expect(text).toContain('`description`')
+    expect(text).not.toContain('`description`')
     expect(text).toContain('one required argument')
   })
 

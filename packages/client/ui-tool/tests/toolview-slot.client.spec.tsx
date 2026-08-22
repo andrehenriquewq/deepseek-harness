@@ -103,7 +103,7 @@ describe('keyed toolview hole through the real machinery', () => {
     // session → global arm, decided inside the component off useSessions).
     expect(view.container.querySelector('[data-sample="bash"]')).not.toBeNull()
     expect(view.getByText('Bash')).toBeTruthy()
-    expect(view.getByText('Build')).toBeTruthy()
+    expect(view.getByText('make build')).toBeTruthy()
     // mystery: no registration under that key → render-site fallback.
     expect(view.getByText('Tool call')).toBeTruthy()
     await b.runtime.dispose()
@@ -146,7 +146,7 @@ describe('keyed toolview hole through the real machinery', () => {
   it('bash summary clicks do not open details or host paths', async () => {
     const b = await bench([toolResult(3, 'c1', 'bash')])
     const view = b.runtime.renderRoot()
-    view.getByText('Build').click()
+    view.getByText('make build').click()
     expect(b.layout.openDetails).not.toHaveBeenCalled()
     expect(b.runtime.workspaces.calls.some(c => c.method === 'openPath')).toBe(false)
     await b.runtime.dispose()

@@ -1,20 +1,20 @@
-# Agent Note: Code Mode 的 UI 基础——run_code 的 description 参数，以及与原生同等保真的分发日志
+# Agent Note: Code Mode 的 UI 基础——run_code 呈现，以及与原生同等保真的分发日志
 
 Status: implemented
 
 [English](2026-07-26-code-dispatch-ui-foundation.md) | 中文
 
-> 范围：让 UI 能以与原生工具调用相同的保真度渲染 Code Mode 轮次的宿主侧约定变更，即其他 Code Mode UI Agent Note 赖以构建的基础。传输设计归 [Code Mode 基础](2026-06-15-code-mode.zh.md)所有；模型可见的 `description` 参数、携带完整内容的 `tool/code-dispatch` 载荷，以及 `dsh` 配置树上临时的 `DSH_TOOLS_MODE` 启用开关，归本篇所有。
+> 范围：让 UI 能以与原生工具调用相同的保真度渲染 Code Mode 轮次的宿主侧变更，即其他 Code Mode UI Agent Note 赖以构建的基础。传输设计归 [Code Mode 基础](2026-06-15-code-mode.zh.md)所有；调用呈现、携带完整内容的 `tool/code-dispatch` 载荷，以及 `dsh` 配置树上临时的 `DSH_TOOLS_MODE` 启用开关，归本篇所有。最初在此记录的纯呈现参数之移除归[仅含前言的工具调用决策](../bug-fix/2026-08-22-preamble-only-tool-calls.zh.md)所有。
 
 ## 问题
 
-`run_code` 轮次过去在每个产品界面上都不透明。调用卡片的标题就是原始程序文本，在行宽内无法阅读；而且不同于 `bash`（其必填的 `description` 用作卡片标签，命令本身放在展开后的输入里），`run_code` 完全没有模型撰写的标签。`tool/code-dispatch` 事件过去只携带每个子调用的 `resultSummary`（上限 200 字符、经 cwd 归一化），因此任何 UI 都无从展示子调用实际返回的内容：Web 对话视图（[chat 子调用行](2026-07-26-code-mode-chat-subcall-rows.zh.md)）会用渲染原生 `tool/result` 卡片的同一批组件来渲染子调用，而有界摘要无法支撑一张与原生同等保真的卡片。同时，`dsh web` 组合此前根本无法启用 Code Mode：`tools` 行钉死在 schema 默认值上，配置树里也完全没有该运行时。
+`run_code` 轮次过去在每个产品界面上都不透明。调用卡片的标题就是原始程序文本，在行宽内无法阅读。`tool/code-dispatch` 事件过去只携带每个子调用的 `resultSummary`（上限 200 字符、经 cwd 归一化），因此任何 UI 都无从展示子调用实际返回的内容：Web 对话视图（[chat 子调用行](2026-07-26-code-mode-chat-subcall-rows.zh.md)）会用渲染原生 `tool/result` 卡片的同一批组件来渲染子调用，而有界摘要无法支撑一张与原生同等保真的卡片。同时，`dsh web` 组合此前根本无法启用 Code Mode：`tools` 行钉死在 schema 默认值上，配置树里也完全没有该运行时。
 
 ## 决策
 
 三项变更，每项对应一个障碍：
 
-1. **`run_code` 新增必填的 `description` 参数**（与 bash 完全相同的约定：主动语态、5-10 个词、展示在 UI 中；仅含空白的取值在执行时被拒绝）。`presentCall` 现在以该 description 作为卡片标题，并把程序文本移入 `rawInput`。提示词侧的成本是每次调用多出几个 token；换来的是每个界面——TUI 卡片、ACP（Agent Client Protocol）标题、Web 行——都无需解析 TypeScript 就能获得可供人阅读的标签。
+1. **`run_code` 分开呈现程序与标题。** `presentCall` 把完整程序放进 `rawInput`，并从程序首个非空行推导标题。每个界面——TUI 卡片、ACP（Agent Client Protocol）标题、Web 行——都无需另一个模型撰写参数即可获得有界标签。
 2. **`tool/code-dispatch` 记录子调用面向模型的完整结果**（`content: ContentBlock[]` 加 `isError`，即 `tool/result` 的词汇），取代 `resultSummary`，并把摘要与 cwd 归一化机制彻底删除。UI 渲染子调用走的代码路径与渲染原生结果完全相同，包括错误文本和非文本块。该事件仍仅用于日志（`deriveMessages()` 忽略它）：模型上下文没有任何变化。
 3. **`dsh` 配置树上的 `DSH_TOOLS_MODE` 环境变量**（`native`|`code`|`both`；未设置时保持 schema 默认值）：`tools` 行通过 `!!js` 读取它，worker 代码运行时则无条件挂载（本项交付时 loader 元数据仍是静态的，因此不存在条件行；后来的 [`disabled` 插值决策](../architecture/2026-08-11-loader-entry-disabled-interpolation.zh.md) 让条件行成为可能，但此处不变——native 启动只是注册该服务，worker 要到每次运行时才 spawn）。这是一个明确标注为临时的配置钩子：设计目标是让 Web UI 拥有按会话的工具模式选择，该目标落地后，这个环境变量随即退役。
 
@@ -28,4 +28,4 @@ Status: implemented
 
 ## 后果
 
-会话格式保持 `SESSION_FORMAT_VERSION` 为 0（预发布阶段的变动不递增版本号；携带 `resultSummary` 的旧日志只是多出一个不被读取的字段并缺少 `content`；v0 不作任何兼容性承诺）。既有的 Code Mode 快照 fixture（测试前置数据）已重新录制。模型可见范围扩大了：`run_code` 的 schema（新增一个必填参数）以及每一份 Code Mode 系统提示词／工具 schema 快照都发生了变化。Web UI 工作直接构建在新的事件载荷之上；每个子调用的实时运行状态已把本事件重塑为一对分发 start/end 事件（[实时并行分发](2026-07-26-code-mode-live-parallel-dispatch.zh.md)）。
+会话格式保持 `SESSION_FORMAT_VERSION` 为 0（预发布阶段的变动不递增版本号；携带 `resultSummary` 的旧日志只是多出一个不被读取的字段并缺少 `content`；v0 不作任何兼容性承诺）。`run_code` schema 携带一个必填的 `code` 参数，Code Mode 系统提示词描述的也是这一个参数。Web UI 工作直接构建在新的事件载荷之上；每个子调用的实时运行状态已把本事件重塑为一对分发 start/end 事件（[实时并行分发](2026-07-26-code-mode-live-parallel-dispatch.zh.md)）。

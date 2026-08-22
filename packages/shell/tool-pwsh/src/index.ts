@@ -62,7 +62,6 @@ export const Config: z<Config> = z.object({
 /** Parsed tool args; execute validates value constraints absent from ParameterSchemaSpec. */
 interface PwshToolArgs {
   command: string
-  description?: string
   timeoutMs?: number
   workdir?: string
   run_in_background?: boolean
@@ -87,9 +86,6 @@ interface PwshForegroundResult {
 function validatePwshArgs(args: PwshToolArgs): void {
   if (args.command.trim().length === 0) {
     throw new Error('invalid command: expected a non-empty string')
-  }
-  if (args.description !== undefined && args.description.trim().length === 0) {
-    throw new Error('invalid description: expected a non-empty string')
   }
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
     throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
@@ -255,12 +251,6 @@ export function apply(ctx: Context, config: Config = {}): void {
     /* jscpd:ignore-start -- deliberate mirror of dsh-tool-bash's parameter surface (pwsh-tool-and-executor Agent Note). */
     parameters: {
       command: { type: 'string', required: true, description: 'The PowerShell command to execute.' },
-      description: {
-        type: 'string',
-        description: 'Clear, concise description of what this command does in active voice, '
-          + '5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; '
-          + '"git status" → "Show working tree status"; "Get-Process" → "List running processes".',
-      },
       timeoutMs: { type: 'number', description: 'Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry.' },
       workdir: { type: 'string', description: 'Working directory for this command. Defaults to the session workspace; a relative path is resolved against it.' },
       ...backgroundEnabled ? {
@@ -415,13 +405,11 @@ export function apply(ctx: Context, config: Config = {}): void {
           title: args.command,
           kind: 'execute',
           rawInput: args.command,
-          ...args.description === undefined ? {} : { content: [{ type: 'text' as const, text: args.description }] },
         }
       }
       return {
         card: 'terminal',
         title: args.command,
-        ...args.description === undefined ? {} : { description: args.description },
         ...args.workdir !== undefined ? { cwd: args.workdir } : {},
       }
     },

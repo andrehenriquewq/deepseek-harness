@@ -407,7 +407,7 @@ describe('BashRow terminal card', () => {
     const view = render(<BashRow {...rowProps(settled({
       callView: { card: 'terminal', title: 'ls -la' },
     }))} />)
-    expect(view.getByText('List files')).toBeTruthy()
+    expect(view.getByText('ls -la')).toBeTruthy()
   })
 
   it('a non-terminal bash call (background start) renders the summary row alone', () => {
@@ -415,7 +415,7 @@ describe('BashRow terminal card', () => {
       callView: { card: 'generic', title: 'sleep 30', kind: 'execute' },
       resultView: { card: 'generic' },
     }))} />)
-    expect(view.getByText('List files')).toBeTruthy()
+    expect(view.getByText('ls -la')).toBeTruthy()
     expect(view.queryByText(/a\.ts/)).toBeNull()
     expect(view.container.querySelector('[data-sample="bash"]')?.getAttribute('role')).toBeNull()
   })

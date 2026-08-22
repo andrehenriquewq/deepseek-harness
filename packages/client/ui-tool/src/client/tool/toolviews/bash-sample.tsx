@@ -1,6 +1,6 @@
 // Bash toolview registrant: third-party posture over the keyed toolview hole
 // (ctx.slots.register + ToolRowProps only — never imports the chat domain).
-// Product chrome matches ToolRow / Think (figma: Bash · {description}).
+// Product chrome matches ToolRow / Think (Bash · command).
 //
 // A bash call normally declares the terminal render intent, so this row renders
 // the command's own output through TerminalBlock. Execution failures that
@@ -49,7 +49,7 @@ function stateStatus(state: ToolRowState, t: BashRowProps['t']): string | null {
 }
 
 /**
- * Bash row: icon + Bash · {description} in the shared ToolRow chrome, the
+ * Bash row: icon + Bash · command in the shared ToolRow chrome, the
  * whole row toggling the command's terminal or generic error card (ToolRow's unified
  * expand interaction, replicated locally per the registrant posture).
  */

@@ -384,7 +384,7 @@ describe('in-process structured output', () => {
 
   it('keeps pure Code Mode at one wire tool and exposes structured capture through the SDK only', async () => {
     const { ctx, parent, adapter } = await setup([
-      toolCallResponse('c1', RUN_CODE_NAME, { code: 'return await tools.structured_output({ answer: 12 })', description: 'Capture the structured answer' }),
+      toolCallResponse('c1', RUN_CODE_NAME, { code: 'return await tools.structured_output({ answer: 12 })' }),
     ], {
       toolMode: 'code',
       codeRun: async (request) => {
@@ -410,7 +410,7 @@ describe('in-process structured output', () => {
 
   it('discards a nested capture when the enclosing run_code execution fails', async () => {
     const { ctx, parent, adapter } = await setup([
-      toolCallResponse('c1', RUN_CODE_NAME, { code: 'await tools.structured_output({ answer: 12 }); throw new Error("boom")', description: 'Capture then fail the program' }),
+      toolCallResponse('c1', RUN_CODE_NAME, { code: 'await tools.structured_output({ answer: 12 }); throw new Error("boom")' }),
       textResponse('outer code failed'),
     ], {
       toolMode: 'code',
@@ -439,7 +439,7 @@ describe('in-process structured output', () => {
 
   it('discards a nested capture when post-policy blocks the enclosing run_code result', async () => {
     const { ctx, parent, adapter } = await setup([
-      toolCallResponse('c1', RUN_CODE_NAME, { code: 'return await tools.structured_output({ answer: 12 })', description: 'Capture the structured answer' }),
+      toolCallResponse('c1', RUN_CODE_NAME, { code: 'return await tools.structured_output({ answer: 12 })' }),
       textResponse('outer code was blocked'),
     ], {
       toolMode: 'code',

@@ -328,7 +328,6 @@ describe('bash tool', () => {
   it.each([
     [{}, /missing required property "command"/],
     [{ command: 42, description: 'd' }, /"command" must be a string/],
-    [{ command: 'x', description: 7 }, /"description" must be a string/],
     [{ command: 'x', description: 'd', timeoutMs: 'soon' }, /"timeoutMs" must be a number/],
     [{ command: 'x', description: 'd', workdir: 7 }, /"workdir" must be a string/],
     [{ command: 'x', description: 'd', run_in_background: 'yes' }, /"run_in_background" must be a boolean/],
@@ -342,7 +341,6 @@ describe('bash tool', () => {
   // Value constraints the ParameterSchemaSpec can't express stay in the tool body.
   it.each([
     [{ command: '  ', description: 'd' }, /invalid command/],
-    [{ command: 'x', description: '   ' }, /invalid description/],
     [{ command: 'x', description: 'd', timeoutMs: -1 }, /invalid timeoutMs/],
   ])('rejects value-invalid args %j', async (args, pattern) => {
     const ctx = await setup()
@@ -551,7 +549,7 @@ describe('background execution through the job runtime', () => {
 
     const schema = ctx.tools.schemas().find(s => s.name === 'bash')!
     expect(Object.keys(schema.parameters.properties as Record<string, unknown>))
-      .toEqual(['command', 'description', 'timeoutMs', 'workdir'])
+      .toEqual(['command', 'timeoutMs', 'workdir'])
     expect(schema.description).toContain('Background execution is not available')
     expect(schema.description).not.toContain('run_in_background')
     // The registry-held definition agrees (schema and capability never disagree).
@@ -906,19 +904,19 @@ describe('renderResult', () => {
 })
 
 describe('tool-owned UI presentation (presentCall / presentResult)', () => {
-  it('bash presentCall: a foreground run is a terminal card (command title, description, workdir → cwd absolute or relative)', async () => {
+  it('bash presentCall: a foreground run is a terminal card (command title, workdir → cwd absolute or relative)', async () => {
     const ctx = await setup()
     // No explicit workdir → a terminal card with no cwd (the UI bridge fills the
     // session cwd it owns; the pure presenter can't see it).
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'ls -la src', description: 'List files in src' }))
-      .toEqual({ card: 'terminal', title: 'ls -la src', description: 'List files in src' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'ls -la src' }))
+      .toEqual({ card: 'terminal', title: 'ls -la src' })
     // An ABSOLUTE workdir is surfaced verbatim as the terminal cwd header.
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', description: 'Print dir', workdir: '/tmp/x' }))
-      .toEqual({ card: 'terminal', title: 'pwd', description: 'Print dir', cwd: '/tmp/x' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', workdir: '/tmp/x' }))
+      .toEqual({ card: 'terminal', title: 'pwd', cwd: '/tmp/x' })
     // A RELATIVE workdir is passed through AS-IS (the bridge resolves it against
     // the session cwd, matching where execution runs) — not dropped.
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', description: 'Print dir', workdir: 'sub' }))
-      .toEqual({ card: 'terminal', title: 'pwd', description: 'Print dir', cwd: 'sub' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'pwd', workdir: 'sub' }))
+      .toEqual({ card: 'terminal', title: 'pwd', cwd: 'sub' })
   })
 
   it('bash presentResult: a terminal result carries RAW output (newlines intact) + parsed exit code', async () => {
@@ -1000,11 +998,11 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     const ctx = await setup()
     // The background start returns a task-id ack, not a streamed run — a generic
     // execute card with the command as rawInput and the description as content.
-    const call = ctx.tools.get('bash')!.presentCall!({ command: 'sleep 100', description: 'wait', run_in_background: true })
-    expect(call).toEqual({ card: 'generic', title: 'sleep 100', kind: 'execute', rawInput: 'sleep 100', content: [{ type: 'text', text: 'wait' }] })
+    const call = ctx.tools.get('bash')!.presentCall!({ command: 'sleep 100', run_in_background: true })
+    expect(call).toEqual({ card: 'generic', title: 'sleep 100', kind: 'execute', rawInput: 'sleep 100' })
     // The ack result is a generic fenced-text card — no terminal output / exit pill.
     const result = ctx.tools.get('bash')!.presentResult!(
-      { command: 'sleep 100', description: 'wait', run_in_background: true },
+      { command: 'sleep 100', run_in_background: true },
       { content: [{ type: 'text', text: 'started background job bash-1' }], isError: false },
     )
     expect(result).toEqual({ card: 'generic', content: [{ type: 'text', text: '```console\nstarted background job bash-1\n```' }] })

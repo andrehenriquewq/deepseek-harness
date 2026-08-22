@@ -20,7 +20,7 @@ Status: implemented
 
 该视图**不**携带结果文本。把面向模型的 `result.content` 附到视图上不会产生效果——消费方的回退路径本就读取原始 `tool/result` 内容——却会把整段搜索文本又序列化进持久化视图一遍。视图只承载结构化形状；无 search 卡片的 UI 回退到原始结果内容。
 
-卡片标签只在结果时存在。搜索调用保持为 `GenericCallView`（`kind: 'search'`）：pending 状态没有匹配或路径可展示，所以 `SearchCallView` 能携带的东西不会比 generic 标题更多。这是与 terminal 卡片的不对称之处——terminal 的调用视图携带执行前就存在的命令、cwd、description；搜索的结构化内容只在 `execute` 之后才存在。
+卡片标签只在结果时存在。搜索调用保持为 `GenericCallView`（`kind: 'search'`）：pending 状态没有匹配或路径可展示，所以 `SearchCallView` 能携带的东西不会比 generic 标题更多。这是与 terminal 卡片的不对称之处——terminal 的调用视图携带执行前就存在的命令与 cwd；搜索的结构化内容只在 `execute` 之后才存在。
 
 `packages/fs/tool-fs-search/src/presentation.ts` 拥有投影与收窄。`grepSearchMeta`/`globSearchMeta` 把 canonical 值投影为每个工具声明为 `output.presentationMeta` 的 `SearchMeta` 载荷；`presentGrepResult`/`presentGlobResult` 经 `searchViewFromMeta` 把 `result.meta` 读回。它们消费与面向模型渲染相同的已保留结果——`search-core.ts` 里的 `retainGrepMatches`/`retainGlobPaths` 只跑一次内联上限与每行预览预算，渲染与投影都取这份产出——所以文本与卡片对哪些结果幸存永不分歧，也没有第二次保留计算。`total` 是搜索找到的全部结果（截断前）；`truncated` 在上限丢弃了结果时置位。这是截断诚实点：模型看到的是被截断的内联结果加一个 spill 脚注，所以卡片不能把保留页当作完整结果——UI 读 `truncated`/`total` 显示截断指示，而非宣称模型从未有过的完整性。
 

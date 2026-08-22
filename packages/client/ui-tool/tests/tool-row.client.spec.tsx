@@ -90,10 +90,10 @@ describe('tool-call-model', () => {
     expect(toolRowModel('bash', result({ isError: true, error: { name: 'E', code: 'interrupted' } })).state).toBe('stopped')
   })
 
-  it('derives the bash summary from description over command', () => {
+  it('derives the bash summary from command and ignores a legacy description', () => {
     const m = toolRowModel('bash', running())
     expect(m.title).toBe('Bash')
-    expect(m.summary).toBe('List files')
+    expect(m.summary).toBe('ls -la')
     expect(toolRowModel('bash', running({ argsRaw: '{"command":"pwd"}' })).summary).toBe('pwd')
   })
 
@@ -407,7 +407,7 @@ describe('GenericToolCard', () => {
   it('renders the classified variant row from the frozen slice', () => {
     const view = render(<GenericToolCard {...props('bash', result())} />)
     expect(view.getByText('Bash')).toBeTruthy()
-    expect(view.getByText('List files')).toBeTruthy()
+    expect(view.getByText('ls -la')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="bash"]')).not.toBeNull()
   })
 
@@ -462,7 +462,7 @@ describe('GenericToolCard', () => {
 
     const bash = props('bash', result())
     const bashView = render(<GenericToolCard {...bash} />)
-    fireEvent.click(bashView.getByText('List files'))
+    fireEvent.click(bashView.getByText('ls -la'))
     expect(bash.openFile).not.toHaveBeenCalled()
   })
 })
