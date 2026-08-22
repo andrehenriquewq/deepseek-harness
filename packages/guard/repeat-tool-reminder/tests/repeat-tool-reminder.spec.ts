@@ -156,6 +156,85 @@ describe('chain semantics', () => {
     expect(found[0]!.text).toContain('repeating the exact same tool call')
   })
 
+  it('a varying description no longer launders an identical repeat', async () => {
+    const ctx = await harness()
+    const adapter = new MockAdapter([
+      // One identical command relabelled three ways: what the call DOES is the
+      // same, so the chain must see one run of three, not three runs of one.
+      toolCallResponse('c1', 'probe', { q: 1, description: 'Count Go files in workspace' }),
+      toolCallResponse('c2', 'probe', { q: 1, description: 'Count .go files in the project' }),
+      toolCallResponse('c3', 'probe', { q: 1, description: 'Count all .go files' }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    const found = reminders(agent)
+    expect(found).toHaveLength(1)
+    expect(found[0]!.source).toEqual(guardSource('probe', 3))
+  })
+
+  it('ignoredArgumentKeys: [] keeps every argument in the chain key', async () => {
+    const ctx = await harness({ ignoredArgumentKeys: [] })
+    const adapter = new MockAdapter([
+      toolCallResponse('c1', 'probe', { q: 1, description: 'a' }),
+      toolCallResponse('c2', 'probe', { q: 1, description: 'b' }),
+      toolCallResponse('c3', 'probe', { q: 1, description: 'c' }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(reminders(agent)).toHaveLength(0)
+  })
+
+  it('strips only top-level keys: a nested description still distinguishes calls', async () => {
+    const ctx = await harness()
+    const adapter = new MockAdapter([
+      toolCallResponse('c1', 'probe', { items: [{ description: 'a' }] }),
+      toolCallResponse('c2', 'probe', { items: [{ description: 'b' }] }),
+      toolCallResponse('c3', 'probe', { items: [{ description: 'c' }] }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(reminders(agent)).toHaveLength(0)
+  })
+
+  it('a call rejected for invalid arguments is transparent: it neither counts nor resets', async () => {
+    const ctx = await harness()
+    ctx.tools.register(defineContentToolFixture({
+      name: 'strict',
+      description: 's',
+      parameters: { command: { type: 'string', required: true } },
+      async execute(args) { return [{ type: 'text', text: args.command }] },
+    }))
+    const adapter = new MockAdapter([
+      toolCallResponse('c1', 'probe', { q: 1 }),
+      // A preamble-only call never ran; it must not reset the probe chain.
+      toolCallResponse('c2', 'strict', { description: 'Count the files' }),
+      toolCallResponse('c3', 'probe', { q: 1 }),
+      toolCallResponse('c4', 'strict', { description: 'Count the files again' }),
+      toolCallResponse('c5', 'probe', { q: 1 }), // 3rd consecutive probe
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    const found = reminders(agent)
+    expect(found).toHaveLength(1)
+    expect(found[0]!.source).toEqual(guardSource('probe', 3))
+  })
+
   it('include patterns track only matching tools (wildcard star)', async () => {
     const ctx = await harness({ include: ['pro*'] })
     const adapter = new MockAdapter([

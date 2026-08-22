@@ -1613,11 +1613,19 @@ export interface Config {
   /** Tool-name patterns transparent to the chain (neither count nor reset). */
   exclude?: string[]
   /**
+   * Top-level argument keys stripped before the chain key is computed
+   * (default `['description']`). A model-authored UI label is not part of what
+   * a call DOES: a model that varies only its label while re-running one
+   * identical command would otherwise launder the repeat past the chain.
+   * Stripping is top-level only — a nested `description` is payload data.
+   */
+  ignoredArgumentKeys?: string[]
+  /**
    * Maximum characters of canonical arguments quoted in the DETAILED reminder
    * (default 500). Large payloads (a `write` body, a long command) would
    * otherwise ride into the next request unbounded — precisely in a loop
    * scenario; the cap bounds the reminder, never the detection (the chain key
-   * always compares the FULL canonical string).
+   * always compares the full canonical string of the tracked arguments).
    */
   argumentsPreviewChars?: number
 }

@@ -328,7 +328,6 @@ describe('bash tool', () => {
   it.each([
     [{}, /missing required property "command"/],
     [{ command: 42, description: 'd' }, /"command" must be a string/],
-    [{ command: 'x' }, /missing required property "description"/],
     [{ command: 'x', description: 7 }, /"description" must be a string/],
     [{ command: 'x', description: 'd', timeoutMs: 'soon' }, /"timeoutMs" must be a number/],
     [{ command: 'x', description: 'd', workdir: 7 }, /"workdir" must be a string/],
@@ -368,7 +367,7 @@ describe('bash tool', () => {
     const bashSchema = schemas[0]!
     expect(bashSchema.parameters).toMatchObject({
       type: 'object',
-      required: ['command', 'description'],
+      required: ['command'],
     })
     expect(Object.keys(bashSchema.parameters.properties as Record<string, unknown>))
       .toContain('run_in_background')
@@ -1042,11 +1041,21 @@ describe('tool-owned UI presentation (presentCall / presentResult)', () => {
     })).toBeUndefined()
   })
 
-  it('presentCall validates softly: malformed args (missing required description) return undefined, never throw', async () => {
+  it('presentCall omits the description slot when the model sent no summary', async () => {
+    const ctx = await setup()
+    // `description` is optional: some models emit the payload alone. The card
+    // still renders, with the command carrying the whole label.
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'ls -la' }))
+      .toEqual({ card: 'terminal', title: 'ls -la' })
+    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'sleep 1', run_in_background: true }))
+      .toEqual({ card: 'generic', title: 'sleep 1', kind: 'execute', rawInput: 'sleep 1' })
+  })
+
+  it('presentCall validates softly: malformed args (missing required command) return undefined, never throw', async () => {
     const ctx = await setup()
     // `defineTool` soft-validates replayed logged args before presentation. Invalid shapes return
     // undefined for generic UI rendering rather than throwing; `presentCall` accepts `unknown`.
-    expect(ctx.tools.get('bash')?.presentCall?.({ command: 'ls' })).toBeUndefined()
+    expect(ctx.tools.get('bash')?.presentCall?.({ workdir: '/tmp' })).toBeUndefined()
   })
 })
 

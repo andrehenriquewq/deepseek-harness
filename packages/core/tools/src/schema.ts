@@ -457,13 +457,53 @@ export function parameterSchemaSpecToJsonSchema(spec: ParameterSchemaSpec): Para
   return schema
 }
 
+/** The only violation shape a preamble-only call produces: a missing root property. */
+const MISSING_REQUIRED_VIOLATION = /^missing required property "([^"]+)"$/
+
+/** Argument keys a model uses to announce a call in prose before writing its payload. */
+const PREAMBLE_KEYS = ['description', 'title'] as const
+
+/**
+ * Build the model-facing repair directive for a preamble-only call: one that
+ * carried a prose summary and none of the required properties. Some models emit
+ * that stub and stop generating, and the violation list alone does not tell them
+ * the summary survived; naming the missing properties alongside the model's own
+ * summary lets it finish the call it already chose instead of starting over.
+ * @param violations - path-qualified violations in schema-walk order.
+ * @param args - the arguments the model produced.
+ * @returns The directive to append, or undefined when the call is not preamble-only.
+ */
+function preambleRepairDirective(violations: readonly string[], args: unknown): string | undefined {
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) return undefined
+  const missing: string[] = []
+  for (const violation of violations) {
+    const name = MISSING_REQUIRED_VIOLATION.exec(violation)?.[1]
+    if (name === undefined) return undefined
+    missing.push(name)
+  }
+  if (missing.length === 0) return undefined
+  const record = args as Record<string, unknown>
+  const preamble = PREAMBLE_KEYS
+    .map(key => record[key])
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  if (preamble === undefined) return undefined
+  const named = missing.map(name => `"${name}"`).join(' and ')
+  return `You described this call as ${JSON.stringify(preamble.trim())} but sent no ${named}. `
+    + `Issue the same call again now with ${named} filled in; the description on its own runs nothing.`
+}
+
 /** Invalid model-generated arguments for a typed tool. */
 export class ToolArgsError extends HarnessError {
   /** Individual violations in schema-walk order. */
   readonly violations: string[]
 
-  constructor(violations: string[]) {
-    super(`invalid arguments: ${violations.join('; ')}`, 'INVALID_ARGS')
+  /**
+   * @param violations - path-qualified violations in schema-walk order.
+   * @param args - the arguments that failed, read only to detect a preamble-only call.
+   */
+  constructor(violations: string[], args?: unknown) {
+    const directive = preambleRepairDirective(violations, args)
+    super(`invalid arguments: ${violations.join('; ')}${directive === undefined ? '' : `. ${directive}`}`, 'INVALID_ARGS')
     this.name = 'ToolArgsError'
     this.violations = violations
   }
@@ -584,7 +624,7 @@ export function defineTool<const S extends ParameterSchemaSpec, const O extends 
     ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
     async execute(args: unknown, exec: ToolRunContext): Promise<JsonValue> {
       const violations = validate(args)
-      if (violations.length > 0) throw new ToolArgsError(violations)
+      if (violations.length > 0) throw new ToolArgsError(violations, args)
       return userExecute(args as InferArgs<S>, exec) as Promise<JsonValue>
     },
   }

@@ -154,7 +154,7 @@ describe('renderToolsSdk', () => {
     const text = renderToolsSdk([bash])
     expect(text).toContain('`code`')
     expect(text).toContain('`description`')
-    expect(text).toContain('two required arguments')
+    expect(text).toContain('one required argument')
   })
 
   it('is deterministic: same tool set, byte-identical text regardless of input order', () => {

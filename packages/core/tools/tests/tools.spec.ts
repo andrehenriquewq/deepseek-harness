@@ -2612,6 +2612,36 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
     expect(err.message).toBe('invalid arguments: missing required property "a"; "b" must be a number')
   })
 
+  it('ToolArgsError repairs a preamble-only call by naming the missing payload beside the model\'s own summary', () => {
+    // Some models announce the call in prose and stop before the payload. The
+    // violation list alone does not tell them the summary survived.
+    const err = new ToolArgsError(['missing required property "command"'], { description: '  Check git status  ' })
+    expect(err.violations).toEqual(['missing required property "command"'])
+    expect(err.message).toBe(
+      'invalid arguments: missing required property "command". '
+      + 'You described this call as "Check git status" but sent no "command". '
+      + 'Issue the same call again now with "command" filled in; the description on its own runs nothing.',
+    )
+  })
+
+  it('ToolArgsError names every missing property of a preamble-only call', () => {
+    const err = new ToolArgsError(
+      ['missing required property "old_string"', 'missing required property "new_string"'],
+      { title: 'Rename the config key' },
+    )
+    expect(err.message).toContain('sent no "old_string" and "new_string"')
+  })
+
+  it.each([
+    ['no preamble to echo', ['missing required property "command"'], { workdir: '/tmp' }],
+    ['a blank preamble', ['missing required property "command"'], { description: '   ' }],
+    ['a violation that is not a missing property', ['"command" must be a string'], { description: 'Run it', command: 7 }],
+    ['non-object arguments', ['missing required property "command"'], 'command'],
+  ])('ToolArgsError leaves the plain violation list alone for %s', (_name, violations, args) => {
+    const err = new ToolArgsError(violations, args)
+    expect(err.message).toBe(`invalid arguments: ${violations.join('; ')}`)
+  })
+
   it('a schema-invalid call surfaces the structured error on the result', async () => {
     const ctx = await setup()
     ctx.tools.register(defineContentToolFixture({

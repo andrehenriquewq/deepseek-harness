@@ -1307,6 +1307,16 @@ describe('the run_code dispatch bridge', () => {
     })
   })
 
+  it("falls back to the program's first line as the card title when the model sent no description", async () => {
+    const { ctx } = await setup({ mode: 'code' })
+    const tool = ctx.tools.get(RUN_CODE_NAME)!
+    expect(tool.presentCall?.({ code: '\n  const x = 1\nreturn x' })).toMatchObject({ title: 'const x = 1' })
+    expect(tool.presentCall?.({ code: '   \n\t\n' })).toMatchObject({ title: RUN_CODE_NAME })
+    const long = tool.presentCall?.({ code: `const label = '${'y'.repeat(90)}'` }) as { title: string }
+    expect(long.title).toHaveLength(72)
+    expect(long.title.endsWith('\u2026')).toBe(true)
+  })
+
   it('rejects a whitespace-only description with a structured isError', async () => {
     const { ctx } = await setup({ mode: 'code' })
     const result = await runCode(ctx, 'return 1', { description: '   ' })

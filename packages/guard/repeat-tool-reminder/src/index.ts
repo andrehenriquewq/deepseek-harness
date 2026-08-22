@@ -12,7 +12,7 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
-import type { PostToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { PostToolDecision, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 
 export const name = 'repeat-tool-reminder'
 
@@ -33,11 +33,19 @@ export interface Config {
   /** Tool-name patterns transparent to the chain (neither count nor reset). */
   exclude?: string[]
   /**
+   * Top-level argument keys stripped before the chain key is computed
+   * (default `['description']`). A model-authored UI label is not part of what
+   * a call DOES: a model that varies only its label while re-running one
+   * identical command would otherwise launder the repeat past the chain.
+   * Stripping is top-level only — a nested `description` is payload data.
+   */
+  ignoredArgumentKeys?: string[]
+  /**
    * Maximum characters of canonical arguments quoted in the DETAILED reminder
    * (default 500). Large payloads (a `write` body, a long command) would
    * otherwise ride into the next request unbounded — precisely in a loop
    * scenario; the cap bounds the reminder, never the detection (the chain key
-   * always compares the FULL canonical string).
+   * always compares the full canonical string of the tracked arguments).
    */
   argumentsPreviewChars?: number
 }
@@ -47,6 +55,7 @@ export const Config: z<Config> = z.object({
   include: z.array(z.string()).default([]),
   exclude: z.array(z.string()).default([]),
   argumentsPreviewChars: z.number().default(500),
+  ignoredArgumentKeys: z.array(z.string()).default(['description']),
 })
 
 /**
@@ -102,6 +111,24 @@ function sortJsonValue(value: unknown): unknown {
 /** Canonical string form of a call's arguments: deep key-sort, then stringify. */
 function canonicalize(argumentsValue: unknown): string {
   return JSON.stringify(sortJsonValue(argumentsValue))
+}
+
+/**
+ * Drop the presentation-only top-level keys so the chain compares what the call
+ * DOES, not how it was labelled. Non-object arguments pass through unchanged.
+ * @param argumentsValue - the call's parsed arguments.
+ * @param ignored - top-level keys to strip.
+ * @returns The arguments to canonicalize into the chain key.
+ */
+function chainArguments(argumentsValue: unknown, ignored: ReadonlySet<string>): unknown {
+  if (ignored.size === 0) return argumentsValue
+  if (argumentsValue === null || typeof argumentsValue !== 'object' || Array.isArray(argumentsValue)) return argumentsValue
+  const record = argumentsValue as Record<string, unknown>
+  const kept: Record<string, unknown> = {}
+  for (const key of Object.keys(record)) {
+    if (!ignored.has(key)) kept[key] = record[key]
+  }
+  return kept
 }
 
 /** Compile one `*`-wildcard pattern to an anchored RegExp (every other regex metacharacter is matched literally). */
@@ -166,6 +193,7 @@ export function apply(ctx: Context, config: Config): void {
   const includePatterns = (config.include as string[]).map(wildcardToRegExp)
   const excludePatterns = (config.exclude as string[]).map(wildcardToRegExp)
   const argumentsPreviewChars = config.argumentsPreviewChars as number
+  const ignoredArgumentKeys = new Set(config.ignoredArgumentKeys as string[])
   if (!Number.isInteger(argumentsPreviewChars) || argumentsPreviewChars < 1) {
     throw new Error(`repeat-tool-reminder: invalid argumentsPreviewChars ${argumentsPreviewChars} — must be an integer >= 1`)
   }
@@ -186,12 +214,16 @@ export function apply(ctx: Context, config: Config): void {
    * same pipeline), and a model hammering a denied call is exactly the loop
    * worth breaking.
    */
-  function observe(exec: ToolExecution): UserMessage | undefined {
+  function observe(exec: ToolExecution, result: Readonly<ToolExecutionResult>): UserMessage | undefined {
     // A direct `ctx.tools.execute()` caller has no model to remind and no id
     // to key on; only agent-loop calls participate.
     if (!exec.agent) return undefined
     if (!tracked(exec.name)) return undefined
-    const canonical = canonicalize(exec.arguments)
+    // A call rejected for malformed arguments never ran, so it is not an
+    // attempt at anything. Counting it would also RESET a genuine repeat chain
+    // that resumes as soon as the model completes the call, hiding the loop.
+    if (result.isError && result.error.info?.code === 'INVALID_ARGS') return undefined
+    const canonical = canonicalize(chainArguments(exec.arguments, ignoredArgumentKeys))
     const key = JSON.stringify([exec.name, canonical])
     const chain = chains.get(exec.agent)
     const count = chain !== undefined && chain.key === key ? chain.count + 1 : 1
@@ -210,8 +242,8 @@ export function apply(ctx: Context, config: Config): void {
   // the downstream outcome), DELEGATE so a later listener can still block or
   // replace, then fold the reminder onto whatever came back — additionalContexts
   // rides both decision variants, so a blocked call still gets the nudge.
-  ctx.on('tools/post-execute', async (exec, _result, next): Promise<PostToolDecision> => {
-    const reminder = observe(exec)
+  ctx.on('tools/post-execute', async (exec, result, next): Promise<PostToolDecision> => {
+    const reminder = observe(exec, result)
     const downstream = await next()
     if (!reminder) return downstream
     if (downstream.kind === 'block') {

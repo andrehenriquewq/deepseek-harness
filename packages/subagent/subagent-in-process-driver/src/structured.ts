@@ -86,7 +86,7 @@ export function attachStructuredRuntime(childCtx: Context, schema: ObjectJsonSch
       const violations = validateJsonSchemaValue(schema, args)
       // ToolArgsError → isError result with INVALID_ARGS: the model retries
       // within the same turn, exactly like a schema-validated defineTool call.
-      if (violations.length > 0) throw new ToolArgsError(violations)
+      if (violations.length > 0) throw new ToolArgsError(violations, args)
       // Two-phase commit, keyed by THIS execution: later transformable
       // waterfalls may still turn the success into an error. ToolRuntime has
       // already frozen model-bound arguments at the actual input boundary.

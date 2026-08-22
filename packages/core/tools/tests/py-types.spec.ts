@@ -172,7 +172,7 @@ describe('renderToolsSdkPy', () => {
     const text = renderToolsSdkPy([bash])
     expect(text).toContain('`code`')
     expect(text).toContain('`description`')
-    expect(text).toContain('two required arguments')
+    expect(text).toContain('one required argument')
   })
 
   it('renders required as plain fields and optional as NotRequired, with per-field description comments', () => {
