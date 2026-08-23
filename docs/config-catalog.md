@@ -3138,6 +3138,32 @@ export interface Config {
 
 Source: [`packages/web/web-fetch-http/src/index.ts:34`](../packages/web/web-fetch-http/src/index.ts)
 
+<a id="deepseek-aidsh-web-search-antigravity"></a>
+
+## `@deepseek-ai/dsh-web-search-antigravity`
+
+Requires: `web`
+
+```ts config-catalog
+/** Plugin config (all optional — `apply` fills env-var and constant defaults). */
+export interface Config {
+  /**
+   * Bearer token for proxies that require one. Falls back to
+   * `$ANTIGRAVITY_API_KEY`; empty sends no `authorization` header and stays
+   * usable (local proxies commonly run without authentication).
+   */
+  apiKey?: string
+  /** Endpoint base; `/chat/completions` is appended. Defaults to the common local proxy address. */
+  baseURL?: string
+  /** Model name sent as the chat `model` field. Defaults to `gemini-3-flash`. */
+  model?: string
+  /** Upper bound on generated answer tokens. Defaults to `1024`. Must be a positive integer. */
+  maxTokens?: number
+}
+```
+
+Source: [`packages/web/web-search-antigravity/src/index.ts:40`](../packages/web/web-search-antigravity/src/index.ts)
+
 <a id="deepseek-aidsh-web-search-deepseek"></a>
 
 ## `@deepseek-ai/dsh-web-search-deepseek`
