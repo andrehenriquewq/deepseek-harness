@@ -160,6 +160,11 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
         return { rpcId: request.rpcId, result: { ok: true, value: { opened: true as const } } }
       },
     },
+    gitState: {
+      async resolve(request) {
+        return { rpcId: request.rpcId, result: { ok: true as const, value: { state: { type: 'no-repository' as const } } } }
+      },
+    },
     workspace: {
       async list(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [] } } }

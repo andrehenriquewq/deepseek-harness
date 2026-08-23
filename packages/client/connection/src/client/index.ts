@@ -29,6 +29,7 @@ export type {
   GoalsApi, GoalRef,
   SettingsApi, SettingsNamespaceView, SettingsPathOpView, SettingsSecretView,
   CredentialsApi, CredentialView, ConfigurableProviderView, DiscoveredModelView, LlmApi,
+  GitDetachedHead, GitNamedBranch, GitNoRepository, GitRepositoryState, GitStateApi, GitUnavailable,
 } from './api.ts'
 export {
   RpcId,

@@ -1,0 +1,7 @@
+- navigation "Session hierarchy":
+  - button "Seeded turn" [disabled]
+- img
+- text: main
+- button "Session log":
+  - text: Session log
+  - img

@@ -813,6 +813,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'gitState',
+    summary: 'Abstract Git repository-state service.',
+    description: 'Abstract Git repository-state service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.gitState` (one implementation per context; loading a second throws, which is cordis\' standard duplicate-service behavior).\n\nImplementations must honor these semantics:\n\n- Resolution and observation are READ-ONLY with respect to the target: no refs, index entries, lock files, configuration, or working-tree content may be created, modified, or removed.\n- Neither run nor an observer callback ever throws to the caller; every failure mode resolves to GitUnavailable with a diagnostic reason.\n- attach reports each transition to a different resolved state for as long as the observation is held, covering changes made by any process.\n- Releasing the disposer returned by attach frees every Host resource that observation acquired; Host shutdown releases every still-outstanding observation without blocking shutdown.',
+    methods: [
+      {
+        signature: 'abstract resolve(request: GitStateRequest): GitStateSpec',
+        description: 'Apply implementation-owned defaults to a request before use.',
+        parameters: [{ name: 'request', description: 'the caller\'s request.' }],
+        returns: 'the fully-specified spec to hand to {@link run}/{@link attach}, never a raw request.',
+      },
+      {
+        signature: 'abstract run(spec: GitStateSpec): Promise<GitRepositoryState>',
+        description: 'Resolve one path to its current state.',
+        parameters: [{ name: 'spec', description: 'a resolved spec from {@link resolve}, never a raw request.' }],
+        returns: 'exactly one determinate state; never rejects.',
+      },
+      {
+        signature: 'abstract attach(spec: GitStateSpec, observer: GitStateObserver): () => void',
+        description: 'Observe one path until release. The observer receives the current state shortly after attach and every later transition to a different state.',
+        parameters: [{ name: 'spec', description: 'a resolved spec from {@link resolve}, never a raw request.' }, { name: 'observer', description: 'invoked asynchronously per reported state.' }],
+        returns: 'the disposer releasing this observation and every Host resource it acquired. Idempotent.',
+      },
+    ],
+  },
+  {
     key: 'goals',
     summary: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
     description: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
@@ -3412,6 +3437,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GenericResultView',
     declaration: 'export interface GenericResultView {\n    card: \'generic\';\n    title?: string;\n    content?: ContentBlock[];\n}',
+  },
+  {
+    name: 'GitStateObserver',
+    declaration: 'export type GitStateObserver = (state: GitRepositoryState) => void;',
+  },
+  {
+    name: 'GitStateRequest',
+    declaration: 'export interface GitStateRequest {\n    path: string;\n}',
+  },
+  {
+    name: 'GitStateSpec',
+    declaration: 'export interface GitStateSpec {\n    path: string;\n}',
   },
   {
     name: 'GoalActivation',

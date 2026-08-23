@@ -1,0 +1,40 @@
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 180px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--dsw-fill-quaternary);
+  color: var(--dsw-text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--dsw-text-tertiary);
+}
+
+/* Ellipsis is the truncation indicator; the native title carries the full
+   name on hover and keyboard focus, so no activation affordance exists. */
+.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detachedMark {
+  flex-shrink: 0;
+  margin-left: 2px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dsw-warning, var(--dsw-text-tertiary));
+}
+
+.detached {
+  border-style: dashed;
+}

@@ -1974,6 +1974,41 @@
       "doc": "docs/subsystems/feedback.md",
       "symbol": "MessageFeedbackDeleteResult",
       "source": "packages/feedback/message-feedback/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitRepositoryState",
+      "source": "packages/git/git-state/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitNamedBranch",
+      "source": "packages/git/git-state/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitDetachedHead",
+      "source": "packages/git/git-state/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitNoRepository",
+      "source": "packages/git/git-state/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitUnavailable",
+      "source": "packages/git/git-state/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitStateRequest",
+      "source": "packages/git/git-state/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/git.md",
+      "symbol": "GitStateSpec",
+      "source": "packages/git/git-state/src/types.ts"
     }
   ]
 }

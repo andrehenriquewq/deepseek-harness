@@ -16,6 +16,7 @@ import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools/presen
 import type { RpcError, RpcId, RpcRequest } from './rpc.ts'
 import type { JobView } from './jobs.ts'
 import type { WorkspaceView } from './workspace.ts'
+import type { GitRepositoryState } from './git-state.ts'
 
 // Client-side consumers take the render-intent vocabulary from the contract;
 // dsh-tools remains its owner.
@@ -123,6 +124,9 @@ export type MuxFrame =
  * registry order after a reorder; archived-sessions-changed pushes the full registry
  * archive set after every durable change (same full-snapshot posture as
  * workspace-changed — `workspace.list` re-baselines it on reconnect).
+ * git-state-changed pushes the resolved repository state of one tracked path
+ * (a live session's cwd); the path key is the same absolute cwd the client
+ * already receives in session frames, so it discloses nothing new.
  */
 export type HostFrame =
   | {
@@ -141,6 +145,7 @@ export type HostFrame =
   | { type: 'host/workspace-removed'; workspaceId: WorkspaceView['workspaceId'] }
   | { type: 'host/workspace-order-changed'; workspaceIds: WorkspaceView['workspaceId'][] }
   | { type: 'host/archived-sessions-changed'; archivedSessionIds: SessionId[] }
+  | { type: 'host/git-state-changed'; path: string; state: GitRepositoryState }
   /**
    * One allowlisted host cordis event forwarded verbatim. The allowlist is
    * owned by `@deepseek-ai/dsh-api-remotes` (`API_REMOTE_FORWARDED_EVENTS`),

@@ -37,7 +37,7 @@ import {
 import type { PresetBearingSession } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-tools'
 import type {
-  ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, HistoryEntry, HostFrame,
+  ApiProxy, ConfigurableProviderView, CredentialView, GoalRef, GitRepositoryState, HistoryEntry, HostFrame,
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
@@ -91,6 +91,7 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
+import { gitRepositoryStatesEqual } from './api/git-state.schema.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
 import type { ClientResponse, RpcError, RpcReceipt, RpcRequest, RpcResponse } from './api/rpc.ts'
@@ -110,6 +111,10 @@ import {
   inspectApiRemoteSession,
 } from '@deepseek-ai/dsh-api-remotes'
 import { canOpenNativePath, openNativePath, openNativeTextFile } from './native-path-opener.ts'
+// Type-only: resolves `ctx.get('gitState')` to the repository-state seam
+// (optional composition — a host without a provider serves the domain as
+// unavailable instead of failing to build).
+import type {} from '@deepseek-ai/dsh-git-state'
 
 /** Page size when history is called without maxMessages. */
 const DEFAULT_MAX_MESSAGES = 50
@@ -1072,6 +1077,87 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const pendingApprovals = new Map<RpcId, PendingApproval>()
   const muxQueues = new Set<FrameQueue<RpcRequest<MuxFrame>>>()
   const imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
+  // Git repository state: one observation per tracked absolute path (live
+  // sessions' cwd values, reference-counted across the sessions sharing one),
+  // fanned out to every open host stream as `host/git-state-changed` frames.
+  // The capability reference-counts by resolved common directory underneath,
+  // so concurrent sessions in one working tree share one watcher.
+  const gitStateQueues = new Set<FrameQueue<RpcRequest<HostFrame>>>()
+  /** Tracked absolute paths -> last pushed state (the reconnect baseline). */
+  const gitStates = new Map<string, GitRepositoryState>()
+  /** Live observation disposer by tracked path (present only while tracked). */
+  const gitWatchers = new Map<string, () => void>()
+  /** Sessions currently accounting each tracked path. */
+  const gitPathRefs = new Map<string, number>()
+
+  const gitStatesEqual = gitRepositoryStatesEqual
+
+  function pushGitState(path: string, state: GitRepositoryState): void {
+    const previous = gitStates.get(path)
+    if (previous !== undefined && gitStatesEqual(previous, state)) return
+    gitStates.set(path, state)
+    for (const queue of gitStateQueues) {
+      queue.push(frame({ type: 'host/git-state-changed', path, state }))
+    }
+  }
+
+  /**
+   * Start observing one path on behalf of one session. A missing provider is
+   * silent absence: the resolve RPC answers unavailable, and nothing watches.
+   */
+  function trackGitPath(path: string): void {
+    gitPathRefs.set(path, (gitPathRefs.get(path) ?? 0) + 1)
+    if (gitWatchers.has(path)) return
+    const capability = ctx.get('gitState')
+    if (capability === undefined) return
+    let disposed = false
+    const release = capability.attach(capability.resolve({ path }), (state) => {
+      pushGitState(path, state)
+    })
+    gitWatchers.set(path, () => {
+      if (disposed) return
+      disposed = true
+      release()
+    })
+    // Seed the reconnect baseline without waiting for a filesystem event.
+    void capability.run(capability.resolve({ path })).then((state) => {
+      if (!disposed && !gitStates.has(path)) pushGitState(path, state)
+    })
+  }
+
+  /** Drop one session's account of a path; the last account stops observing. */
+  function untrackGitPath(path: string): void {
+    const remaining = (gitPathRefs.get(path) ?? 1) - 1
+    if (remaining > 0) {
+      gitPathRefs.set(path, remaining)
+      return
+    }
+    gitPathRefs.delete(path)
+    gitWatchers.get(path)?.()
+    gitWatchers.delete(path)
+    gitStates.delete(path)
+  }
+
+  /**
+   * Track the cwd of every live agent: resumed sessions are already in the
+   * registry when the proxy mounts, and created/disposed events keep the set
+   * current for the proxy's lifetime.
+   */
+  function installGitTracking(): void {
+    if (ctx.get('gitState') === undefined) return
+    for (const agent of ctx.agents.list()) {
+      if (agent.session.header.cwd !== undefined) trackGitPath(agent.session.header.cwd)
+    }
+    ctx.on('session/created', (session: Session) => {
+      if (session.header.cwd === undefined) return
+      trackGitPath(session.header.cwd)
+    })
+    ctx.on('session/disposed', (session: Session) => {
+      if (session.header.cwd === undefined) return
+      untrackGitPath(session.header.cwd)
+    })
+  }
+  installGitTracking()
 
   /** Serialize image admission with model selection for one agent. */
   function serializeImageAdmission<T>(agent: Agent, operation: () => Promise<T>): Promise<T> {
@@ -2820,6 +2906,19 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
     },
 
+    gitState: {
+      async resolve(request) {
+        const capability = ctx.get('gitState')
+        if (capability === undefined) {
+          return ok(request, { state: { type: 'unavailable', reason: 'the Git repository-state capability is not mounted' } })
+        }
+        // The capability never throws: every outcome is one of the four
+        // determinate states, including an unreadable path.
+        const state = await capability.run(capability.resolve(request.payload))
+        return ok(request, { state })
+      },
+    },
+
     host: {
       describe(request) {
         // TODO: version should read apps/cli's package.json; placeholder for now.
@@ -3431,6 +3530,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       host(_request, signal) {
         const queue = new FrameQueue<RpcRequest<HostFrame>>()
+        // Git-state frames originate outside this subscriber's listeners; the
+        // shared tracker fans every transition into all open host streams.
+        gitStateQueues.add(queue)
         const committedWorkspaces = ctx.workspaceRegistry.list()
         const committedWorkspaceIds = new Set(
           committedWorkspaces.map(workspace => String(workspace.id)),
@@ -3530,7 +3632,15 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             }),
           )),
         ]
-        return queue.iterate(signal, () => { for (const dispose of disposers) dispose() })
+        // Reconnect baseline for tracked paths, after registration so no
+        // later change is missed between snapshot and stream start.
+        for (const [path, state] of gitStates) {
+          queue.push(frame({ type: 'host/git-state-changed', path, state }))
+        }
+        return queue.iterate(signal, () => {
+          gitStateQueues.delete(queue)
+          for (const dispose of disposers) dispose()
+        })
       },
     },
 

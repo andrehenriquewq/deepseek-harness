@@ -6,6 +6,7 @@ import type {
   RpcError, RpcReceipt, RpcRequest, RpcResponse, SessionId, SessionModels, SessionSearchItem, SkillEntry,
   WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ResponseValue } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-client-connection/client'
 import type { SessionRemotes } from '../src/client/sessions/remotes.ts'
 
@@ -220,6 +221,27 @@ export class FakeApiClient implements IApiClient {
       this.record('workspace.insertSessionBefore', payload, this.onWorkspaceInsertSessionBefore(payload)),
     archiveSession: (payload: unknown) =>
       this.record('workspace.archiveSession', payload, this.onWorkspaceArchiveSession(payload)),
+  }
+
+
+  /** Programmable per-path resolve answer; defaults to a plain non-repository. */
+  onGitStateResolve: (payload: { path: string }) => Promise<ResponseValue<'gitState.resolve'>> =
+    () => Promise.resolve({ state: { type: 'no-repository' } })
+
+  /**
+   * Whole-response override (error envelopes for absent-domain simulation);
+   * when set it replaces the value-shaped hook entirely.
+   */
+  onGitStateResolveResponse: ((payload: { path: string }) => Promise<RpcResponse<ResponseValue<'gitState.resolve'>>>) | undefined
+
+  readonly gitState: IApiClient['gitState'] = {
+    resolve: (payload: unknown) => this.record(
+      'gitState.resolve',
+      payload,
+      this.onGitStateResolveResponse !== undefined
+        ? this.onGitStateResolveResponse(payload as { path: string })
+        : this.onGitStateResolve(payload as { path: string }).then(value => ok(value)),
+    ),
   }
 
   // Payloads stay `unknown` (lint-lane note above); response rows are the real

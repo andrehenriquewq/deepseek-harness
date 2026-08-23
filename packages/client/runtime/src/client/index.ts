@@ -11,6 +11,7 @@ import { SlotRegistry } from './slots.ts'
 import { SessionRuntime } from './sessions/service.ts'
 import type { SessionListState } from './sessions/service.ts'
 import { WorkspaceRuntime } from './workspaces/service.ts'
+import { GitStateRuntime } from './git-state/service.ts'
 import type { ConversationSnapshot } from './sessions/conversation.ts'
 import type { UseProjection } from './sessions/projection-store.ts'
 import { ConversationEventRegistry } from './conversation/event-registry.ts'
@@ -56,6 +57,9 @@ export type { Session } from './sessions/session.ts'
 export type { ISession, ProjectionsFace, SessionFace } from './contract/session.ts'
 export type { AgentContext, ISessions } from './contract/sessions.ts'
 export type { IWorkspaces } from './contract/workspaces.ts'
+export type { GitStateSnapshot, IGitState } from './contract/git-state.ts'
+export type { GitRepositoryState } from '@deepseek-ai/dsh-client-connection/client'
+export { GitStateManager } from './git-state/manager.ts'
 export type {
   SessionBinding, SessionListState, SessionProvideContribution, SessionProvideDescriptor, SessionSummary,
 } from './sessions/service.ts'
@@ -176,6 +180,8 @@ declare module '@deepseek-ai/cordis' {
     sessions: import('./contract/sessions.ts').ISessions
     /** The outward face only; the concrete service stays inside the runtime. */
     workspaces: import('./contract/workspaces.ts').IWorkspaces
+    /** The outward face only; the concrete service stays inside the runtime. */
+    gitState: import('./contract/git-state.ts').IGitState
   }
 }
 
@@ -197,6 +203,9 @@ export function apply(ctx: Context): void {
     identity: candidate => sessions.scopeOf(candidate),
   })
   const workspaces = new WorkspaceRuntime(ctx, connection.api, sessions)
+  // Repository state mirrors session cwds; constructing after Sessions gives
+  // the reconcile its list source.
+  const gitStates = new GitStateRuntime(ctx, connection.api, sessions)
   ctx.effect(
     () => workspaces.startInitialSelection(),
     'runtime: initial Workspace selection',
@@ -208,6 +217,7 @@ export function apply(ctx: Context): void {
     onHostEnvelope: (envelope) => {
       sessions.handleHostEnvelope(envelope)
       workspaces.handleHostEnvelope(envelope)
+      gitStates.handleHostEnvelope(envelope)
       // Forwarded-event bridge: the session layer ignores registry frames (no
       // session routing). This plugin owns the frame sink, so it hands the
       // decoded frame straight to the Remote service, which fans it out to
@@ -218,6 +228,7 @@ export function apply(ctx: Context): void {
     onConnected: () => {
       sessions.handleConnected()
       workspaces.handleConnected()
+      gitStates.handleConnected()
       ctx.emit('connection/reset')
     },
     onStateChange: (state) => {

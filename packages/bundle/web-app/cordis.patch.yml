@@ -100,6 +100,13 @@
     - id: plugin-inventory
       name: '@deepseek-ai/dsh-host-plugin-inventory'
 
+    # Git repository state under session cwds: resolution delegates to the
+    # local `git` binary; where watching or spawning is unavailable the
+    # capability degrades to polling or to the unavailable state, and the
+    # header chip renders nothing rather than a wrong branch.
+    - id: git-state
+      name: '@deepseek-ai/dsh-git-state-local'
+
     # The API gateway: the transport-agnostic dispatch face every client shape
     # shares. The base layer's agent-default-model service owns the default model.
     - id: api-gateway
@@ -273,6 +280,11 @@
 
     - id: ui-permission
       name: '@deepseek-ai/dsh-client-ui-permission-presets'
+
+    # Session-header Git branch chip: reads the repository-state frames the
+    # gitState domain pushes for live sessions' cwd values.
+    - id: ui-git-branch
+      name: '@deepseek-ai/dsh-client-ui-git-branch'
 
     # The agent-preset row in General settings: the default preset for
     # sessions created later. Absent a roster it renders nothing.

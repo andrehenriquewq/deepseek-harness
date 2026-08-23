@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId, WorkspaceId } from '../src/client/api.ts'
 import { RpcId } from '../src/client/api.ts'
 import type { HostFrame, MuxFrame, RpcMessage, RpcRequest } from '../src/client/api.ts'
-import { FixtureApiClient, createFixtureApi } from '../src/client/fixture.ts'
+import { FixtureApiClient, createFixtureApi, createFixtureFaces } from '../src/client/fixture.ts'
 
 const sid = (id: string): SessionId => id as SessionId
 const req = <P>(payload: P): RpcRequest<P> => ({ rpcId: RpcId(`t-${Math.abs(Math.sin(reqCount++)).toString(36).slice(2, 10)}`), payload })
@@ -50,6 +50,34 @@ async function collect<F>(stream: AsyncIterable<RpcRequest<F>>, abort: AbortCont
   }
   return frames
 }
+
+describe('fixture gitState domain', () => {
+  it('resolves the resident workspace cwd to its seeded branch and unknown paths to no-repository', async () => {
+    const api = createFixtureApi()
+    const tracked = await api.gitState.resolve(req({ path: '/tmp/fixture' }))
+    expect(tracked.result).toEqual({ ok: true, value: { state: { type: 'named-branch', branch: 'master' } } })
+    const untracked = await api.gitState.resolve(req({ path: '/somewhere/else' }))
+    expect(untracked.result).toEqual({ ok: true, value: { state: { type: 'no-repository' } } })
+  })
+
+  it('pushes host/git-state-changed frames through setGitState while a stream is open', async () => {
+    const world = createFixtureFaces()
+    const abort = new AbortController()
+    const done = (frames: HostFrame[]): boolean =>
+      frames.filter(frame => frame.type === 'host/git-state-changed').length >= 2
+    const collected = collect(world.api.events.host(req({}), abort.signal), abort, done)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    world.setGitState('/tmp/fixture', { type: 'named-branch', branch: 'feature' })
+    world.setGitState('/tmp/other', { type: 'detached', commit: '4f2a9c1' })
+    const frames = await collected
+    const git = frames.filter((frame): frame is Extract<HostFrame, { type: 'host/git-state-changed' }> =>
+      frame.type === 'host/git-state-changed')
+    expect(git.map(frame => [frame.path, frame.state])).toEqual([
+      ['/tmp/fixture', { type: 'named-branch', branch: 'feature' }],
+      ['/tmp/other', { type: 'detached', commit: '4f2a9c1' }],
+    ])
+  })
+})
 
 describe('createFixtureApi', () => {
   it('serves the session list sorted by updatedAt desc and echoes rpcIds on every unary', async () => {

@@ -870,3 +870,31 @@ export const IconArchiveOutline20 = ({ size = 20, className }: IconProps) => (
     <path d="M12.7962 12.5661V11.0832H7.20548V12.5661L12.7962 12.5661Z" fill="currentColor" />
   </svg>
 )
+
+/**
+ * ic_ds_git_branch_outline_16: version-control branch glyph; separates
+ * repository branch context from the client build badge.
+ */
+export const IconGitBranchOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d={
+        'M4.5 5.71429V10.2857M4.5 5.71429C5.60457 5.71429 6.5 4.81886 6.5 ' +
+        '3.71429C6.5 2.60972 5.60457 1.71429 4.5 1.71429C3.39543 ' +
+        '1.71429 2.5 2.60972 2.5 3.71429C2.5 4.81886 3.39543 5.71429 ' +
+        '4.5 5.71429ZM4.5 10.2857C5.60457 10.2857 6.5 11.1811 6.5 ' +
+        '12.2857C6.5 13.3903 5.60457 14.2857 4.5 14.2857C3.39543 ' +
+        '14.2857 2.5 13.3903 2.5 12.2857C2.5 11.1811 3.39543 10.2857 ' +
+        '4.5 10.2857ZM11.5 5.71429C12.6046 5.71429 13.5 4.81886 13.5 ' +
+        '3.71429C13.5 2.60972 12.6046 1.71429 11.5 1.71429C10.3954 ' +
+        '1.71429 9.5 2.60972 9.5 3.71429C9.5 4.81886 10.3954 5.71429 ' +
+        '11.5 5.71429ZM11.5 5.71429C11.5 7.5 10.75 8.25 9 8.25H6.5C5.5 ' +
+        '8.25 4.5 8.75 4.5 10.2857'
+      }
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)

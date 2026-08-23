@@ -1,0 +1,7 @@
+- navigation "Session hierarchy":
+  - button "Seeded turn" [disabled]
+- img
+- text: <COMMIT> Detached HEAD
+- button "Session log":
+  - text: Session log
+  - img

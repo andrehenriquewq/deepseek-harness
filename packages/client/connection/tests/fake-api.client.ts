@@ -170,6 +170,12 @@ export class FakeApiClient implements IApiClient {
     }))),
   }
 
+  readonly gitState: IApiClient['gitState'] = {
+    resolve: (payload: unknown) => this.record('gitState.resolve', payload, Promise.resolve(ok({
+      state: { type: 'no-repository' },
+    }))),
+  }
+
   // Payloads stay `unknown` (lint-lane note above); response rows are the real
   // wire shapes so cases can program catalogs and skill lists without casts.
   onSkillList: (payload: unknown) => Promise<RpcResponse<{ skills: SkillEntry[] }>>

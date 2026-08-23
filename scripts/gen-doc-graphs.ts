@@ -390,6 +390,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The bash executors, the PTY shell backend, the LSP host, and the out-of-process ACP, Codex, and Claude Code subagent backends spawn through ctx.subprocess; the service owns process coordinates, tree/session lifetime, stdio dispositions, terminal mechanics, and kill escalation.',
   },
   {
+    key: 'gitState',
+    pkg: 'git-state',
+    title: 'Git repository state',
+    mode: 'seam',
+    implementations: ['git-state-local'],
+    consumers: ['apiproxy'],
+    note: 'Resolution delegates to the git binary; the apiproxy tracks live session cwd values and pushes host frames, and the header chip consumes them.',
+  },
+  {
     key: 'shell',
     pkg: 'shell',
     title: 'Bash executor seam',

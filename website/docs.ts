@@ -282,6 +282,7 @@ const subsystemGroups = [
     ['tools.md', '工具', 'Tools'],
     ['shell.md', 'Bash 执行', 'Bash execution'],
     ['subprocess.md', '子进程', 'Subprocesses'],
+    ['git.md', 'Git 仓库状态', 'Git repository state'],
     ['terminal.md', 'PTY 会话', 'PTY sessions'],
     ['jobs.md', '后台任务', 'Background jobs'],
     ['filesystem.md', '文件系统', 'Filesystem'],

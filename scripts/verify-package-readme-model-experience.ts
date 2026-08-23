@@ -34,6 +34,9 @@ const NO_MODEL_EXPERIENCE_SECTION: Readonly<Record<string, string>> = {
   'packages/util/brand': 'The package is a type-only primitive erased at compile time.',
   'packages/util/home-paths': 'The package only resolves harness-owned host paths; model-facing consumers own any rendered use.',
   'packages/util/launch-environment': 'The package only resolves host environment values; model-facing consumers own any rendered use.',
+  'packages/git/git-state': 'Model-agnostic resolution seam; the branch states it exposes are presentation-only and never enter a model request.',
+  'packages/git/git-state-local': 'Read-only git-binary backend; it registers no prompt, schema, or result of its own.',
+  'packages/client/ui-git-branch': 'Browser-side header chip over Host-pushed repository state; branch text never enters a model request or the session log.',
 }
 
 /**

@@ -28,6 +28,9 @@ import {
   workspaceListRequestSchema, workspaceListValueSchema,
   workspaceRenameRequestSchema, workspaceRenameValueSchema, workspaceViewSchema,
 } from '../src/api/workspace.schema.ts'
+import {
+  gitRepositoryStateSchema, gitStateResolveRequestSchema, gitStateResolveValueSchema,
+} from '../src/api/git-state.schema.ts'
 import { skillEntrySchema, skillListRequestSchema, skillListValueSchema } from '../src/api/skills.schema.ts'
 import {
   agentPresetEntrySchema, agentPresetListValueSchema, agentPresetOpenDocumentValueSchema,
@@ -408,6 +411,35 @@ describe('workspace domain schemas', () => {
     expect(() => workspaceInsertBeforeRequestSchema.parse({ beforeWorkspaceId: 'w2' })).toThrow()
     expect(workspaceInsertBeforeValueSchema.parse({ workspaceIds: ['w2', 'w1'] }).workspaceIds)
       .toEqual(['w2', 'w1'])
+  })
+})
+
+describe('gitState domain schemas', () => {
+  it('validates the four-state union and rejects unknown tags', () => {
+    expect(gitRepositoryStateSchema.parse({ type: 'named-branch', branch: 'main' })).toEqual({ type: 'named-branch', branch: 'main' })
+    expect(gitRepositoryStateSchema.parse({ type: 'detached', commit: '4f2a9c1' })).toEqual({ type: 'detached', commit: '4f2a9c1' })
+    expect(gitRepositoryStateSchema.parse({ type: 'no-repository' })).toEqual({ type: 'no-repository' })
+    expect(gitRepositoryStateSchema.parse({ type: 'unavailable', reason: 'x' }).type).toBe('unavailable')
+    expect(() => gitRepositoryStateSchema.parse({ type: 'named-branch' })).toThrow()
+    expect(() => gitRepositoryStateSchema.parse({ type: 'quantum' })).toThrow()
+    // An unavailable reason is diagnostic-only but must be present.
+    expect(() => gitRepositoryStateSchema.parse({ type: 'unavailable' })).toThrow()
+  })
+
+  it('validates the resolve request and value pair', () => {
+    expect(gitStateResolveRequestSchema.parse({ path: '/repo' })).toEqual({ path: '/repo' })
+    expect(() => gitStateResolveRequestSchema.parse({ path: '' })).toThrow()
+    expect(() => gitStateResolveRequestSchema.parse({})).toThrow()
+    const value = gitStateResolveValueSchema.parse({ state: { type: 'detached', commit: 'abc1234' } })
+    expect(value.state).toEqual({ type: 'detached', commit: 'abc1234' })
+    expect(() => gitStateResolveValueSchema.parse({ state: { type: 'nope' } })).toThrow()
+  })
+
+  it('round-trips the host/git-state-changed frame through hostFrameSchema', () => {
+    const frame = { type: 'host/git-state-changed', path: '/repo', state: { type: 'named-branch', branch: 'feat' } }
+    expect(hostFrameSchema.parse(frame)).toEqual(frame)
+    expect(() => hostFrameSchema.parse({ type: 'host/git-state-changed', path: '', state: { type: 'no-repository' } })).toThrow()
+    expect(() => hostFrameSchema.parse({ type: 'host/git-state-changed', path: '/r', state: { kind: 'no-repository' } })).toThrow()
   })
 })
 

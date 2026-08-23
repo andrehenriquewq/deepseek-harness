@@ -34,7 +34,7 @@ import { deriveEventMessage, foldSurface } from '@deepseek-ai/dsh-session/surfac
 import type {
   ApiProxy, ClientRequest, ClientResponse, HistoryEntry, HostFrame, MuxFrame, RpcReceipt,
   ModelProviderGroup, ModelSelection, RpcRequest, RpcResponse, RpcResult, ServerRequest, ServerResponse, SessionSummary,
-  ToolCallView, ToolEventView, ToolResultView, WorkspaceId, WorkspaceView,
+  ToolCallView, ToolEventView, ToolResultView, WorkspaceId, WorkspaceView, GitRepositoryState,
 } from './api.ts'
 import type { RequestPayload, ResponseValue, RpcMethodMap } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { AbstractApiClient, RpcId, SESSION_SEARCH_RESULT_LIMIT } from './api.ts'
@@ -1509,6 +1509,13 @@ export interface FixtureWorld {
   readonly api: ApiProxy
   /** Generic Remote caller for the endpoints business services own. */
   readonly rpc: ClientConnectionRpc
+  /**
+   * Move one tracked path's Git state and push the matching host frame, so
+   * journeys exercise live branch changes without a real repository.
+   * @param path - absolute directory path key.
+   * @param state - the resolved state the fixture reports from now on.
+   */
+  readonly setGitState: (path: string, state: GitRepositoryState) => void
 }
 
 /**
@@ -1654,6 +1661,16 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       ],
     },
   ]
+
+  /**
+   * Git repository state for tracked paths (the resident sessions' cwd is on
+   * `master`); untracked paths answer no-repository. Journeys drive it through
+   * {@link FixtureWorld.setGitState}, which emits the same host frame the
+   * real host pushes on a branch change.
+   */
+  const gitStates = new Map<string, GitRepositoryState>([
+    ['/tmp/fixture', { type: 'named-branch', branch: 'master' }],
+  ])
 
   const muxConns = new Set<StreamConn<MuxFrame>>()
   const hostConns = new Set<StreamConn<HostFrame>>()
@@ -2923,6 +2940,13 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         ),
       ),
     },
+    gitState: {
+      // One-shot resolution over the tracked map: unknown paths are simply not
+      // repositories, mirroring the host's determinate-state posture.
+      resolve: request => ok(request, {
+        state: gitStates.get(request.payload.path) ?? { type: 'no-repository' },
+      }),
+    },
     events: {
       async *mux(_request, signal) {
         const conn = new FxInbox<MuxFrame>()
@@ -3124,7 +3148,14 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       }
     },
   }
-  return { api, rpc }
+  return {
+    api,
+    rpc,
+    setGitState: (path, state) => {
+      gitStates.set(path, state)
+      emitHost({ type: 'host/git-state-changed', path, state })
+    },
+  }
 }
 
 /**
@@ -3203,6 +3234,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'workspace.insertBefore': return this.api.workspace.insertBefore(request)
       case 'workspace.insertSessionBefore': return this.api.workspace.insertSessionBefore(request)
       case 'workspace.archiveSession': return this.api.workspace.archiveSession(request)
+      case 'gitState.resolve': return this.api.gitState.resolve(request)
       case 'skill.list': return this.api.skills.list(request)
       case 'agentPreset.list': return this.api.agentPresets.list(request)
       case 'agentPreset.select': return this.api.agentPresets.select(request)
