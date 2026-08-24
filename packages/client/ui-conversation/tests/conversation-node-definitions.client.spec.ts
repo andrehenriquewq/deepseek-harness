@@ -68,6 +68,11 @@ function at(
   }
 }
 
+/** Attach the envelope-level presentation the host computes for a tool event. */
+function viewed(input: ConversationEventInput, view: ConversationEventInput['view']): ConversationEventInput {
+  return { ...input, view }
+}
+
 function assembler(entries: readonly ConversationEventInput[] = [], hasMore = false): ConversationNodeAssembler {
   const value = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
   value.replaceWindow(entries, hasMore)
@@ -356,6 +361,37 @@ describe('built-in conversation node Definitions', () => {
     history.flush()
     const withSecondChild = node(snapshot(history), 'tool-call')
     expect((withSecondChild?.data as ToolChatData).root.subCalls[0]).toBe(firstChild)
+  })
+
+  it('gives each sub-dispatch its own presentation and keeps the call view across its settle', () => {
+    const readCall = { for: 'call' as const, view: { card: 'generic' as const, title: 'Read README.md', kind: 'read' as const } }
+    const readResult = { for: 'result' as const, view: { card: 'generic' as const, title: 'Read README.md' } }
+    const dispatch = (subCallId: string, name: string): Record<string, unknown> => ({
+      rootCallId: 'root', parentCallId: 'root', subCallId, name, arguments: { file_path: 'README.md' },
+    })
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'step/start', { turn: 1, step: 1 }),
+      at(3, 'tool/call', { turn: 1, step: 1, callId: 'root', name: 'run_code', arguments: '{"code":"await tools.read({})"}' }),
+      viewed(at(4, 'tool/code-dispatch-start', dispatch('child', 'read')), readCall),
+      // A sub-tool whose definition declares no presenter: the host shipped no
+      // view, and the row falls back to its args-derived summary.
+      at(5, 'tool/code-dispatch-start', dispatch('bare', 'echo')),
+    ], true)
+
+    const running = (node(snapshot(value), 'tool-call')?.data as ToolChatData).root.subCalls
+    expect(running[0]?.callView).toEqual(readCall.view)
+    expect(running[1]?.callView).toBeNull()
+
+    value.append(viewed(at(6, 'tool/code-dispatch', {
+      ...dispatch('child', 'read'), isError: false, content: [{ type: 'text', text: 'contents' }],
+    }), readResult))
+    value.flush()
+
+    const settled = (node(snapshot(value), 'tool-call')?.data as ToolChatData).root.subCalls[0]
+    // The pending card survives its own settle, exactly as a root call's does.
+    expect(settled?.callView).toEqual(readCall.view)
+    expect(settled).toMatchObject({ kind: 'tool-result', resultView: readResult.view })
   })
 
   it('prepends an older turn without replacing already materialized nodes', () => {

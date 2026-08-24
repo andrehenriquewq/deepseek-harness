@@ -20,10 +20,10 @@
   - img
   - img
   - text: Think I will inspect the current Session's dynamic Cordis Plugins before defining the snapshot Package.
-- 'button "Tool call cordis_inspect_self · {}"':
+- button "Tool call Inspect dynamic Cordis Plugins":
   - img
   - img
-  - text: "Tool call cordis_inspect_self · {}"
+  - text: Tool call Inspect dynamic Cordis Plugins
 - button "Think No dynamic Plugins are present, so I will define the requested Host and Client Package.":
   - img
   - img

@@ -26,45 +26,45 @@
   - img
   - img
   - text: "Think The user's goal is: \"做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的\" — which translates to: \"Do two turns, each turn output the file structure of a random package. Note that after you finish one turn, directly output the content and stop; our system will help you open another turn, and you just do something similar.\""
-- button "Bash Show working directory and its contents":
+- button "Bash pwd && ls -la":
   - img
   - img
-  - text: Bash Show working directory and its contents
-- 'button "Tool call get_goal · {}"':
+  - text: Bash pwd && ls -la
+- button "Tool call Read current goal":
   - img
   - img
-  - text: "Tool call get_goal · {}"
+  - text: Tool call Read current goal
 - 'button "Think There''s a `packages` directory. Let me look inside to see what packages are available."':
   - img
   - img
   - text: "Think There's a `packages` directory. Let me look inside to see what packages are available."
-- button "Bash List packages directory contents":
+- button "Bash ls packages && echo \"---\" && find packages -maxdepth 2 -type d":
   - img
   - img
-  - text: Bash List packages directory contents
+  - text: Bash ls packages && echo "---" && find packages -maxdepth 2 -type d
 - button "Think There are 4 packages:":
   - img
   - img
   - text: "Think There are 4 packages:"
-- button "Failed Bash Randomly pick one package directory":
+- 'button "Failed Bash find packages -maxdepth 2 -mindepth 2 -type d | sort | awk ''{print NR\": \"$0}'' && echo \"---random pick---\" && find packages -maxdepth 2 -mindepth 2 -type d | sort | PATH=/__dsh_fixture_missing__ shuf -n 1"':
   - img
-  - text: Failed Bash Randomly pick one package directory
+  - text: "Failed Bash find packages -maxdepth 2 -mindepth 2 -type d | sort | awk '{print NR\": \"$0}' && echo \"---random pick---\" && find packages -maxdepth 2 -mindepth 2 -type d | sort | PATH=/__dsh_fixture_missing__ shuf -n 1"
 - 'button "Think shuf is not available on macOS. I''ll use a different approach for random selection. Let me use $RANDOM in bash or use `sort -R` or Python."':
   - img
   - img
   - text: "Think shuf is not available on macOS. I'll use a different approach for random selection. Let me use $RANDOM in bash or use `sort -R` or Python."
-- button "Bash Randomly select one package with Python":
+- button "Bash find packages -maxdepth 2 -mindepth 2 -type d | sort > /tmp/pkglist.txt && python3 -c \"":
   - img
   - img
-  - text: Bash Randomly select one package with Python
+  - text: Bash find packages -maxdepth 2 -mindepth 2 -type d | sort > /tmp/pkglist.txt && python3 -c "
 - 'button "Think The random pick for turn 1 is `packages/context/session-reference`. Now I''ll output its file structure. Let me get the file tree."':
   - img
   - img
   - text: "Think The random pick for turn 1 is `packages/context/session-reference`. Now I'll output its file structure. Let me get the file tree."
-- button "Bash List all files in session-reference package":
+- button "Bash find packages/context/session-reference -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | sort":
   - img
   - img
-  - text: Bash List all files in session-reference package
+  - text: Bash find packages/context/session-reference -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | sort
 - 'button "Think Turn 1 is done. Per the objective: \"你做完一个turn之后，直接输出内容，停止\" — after finishing a turn, directly output the content and stop. The system will open another turn."':
   - img
   - img
@@ -96,22 +96,22 @@
   - img
   - img
   - text: "Think This is turn 2 of 2. I need to randomly pick another package and output its file structure. In the first turn I picked `packages/context/session-reference`. Let me pick a different one randomly this time."
-- button "Bash Randomly select another package with Python":
+- button "Bash find packages -maxdepth 2 -mindepth 2 -type d | sort > /tmp/pkglist.txt && python3 -c \"":
   - img
   - img
-  - text: Bash Randomly select another package with Python
+  - text: Bash find packages -maxdepth 2 -mindepth 2 -type d | sort > /tmp/pkglist.txt && python3 -c "
 - 'button "Think The random pick returned the same package as turn 1. Since turn 1 already covered `session-reference`, it would be better to pick a different one for variety. Let me re-roll, excluding the already-covered package."':
   - img
   - img
   - text: "Think The random pick returned the same package as turn 1. Since turn 1 already covered `session-reference`, it would be better to pick a different one for variety. Let me re-roll, excluding the already-covered package."
-- button "Bash Re-roll excluding the package from turn 1":
+- button "Bash python3 -c \"":
   - img
   - img
-  - text: Bash Re-roll excluding the package from turn 1
-- button "Bash List all files in token-meter package":
+  - text: Bash python3 -c "
+- button "Bash find packages/llm/token-meter -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | sort":
   - img
   - img
-  - text: Bash List all files in token-meter package
+  - text: Bash find packages/llm/token-meter -type f -not -path '*/node_modules/*' -not -path '*/.git/*' | sort
 - 'button "Think This is turn 2 of 2. I''ve output the file structure for `packages/llm/token-meter`. Both turns are done. I should output the content, stop, and then mark the goal as complete since both turns are finished."':
   - img
   - img
@@ -131,15 +131,15 @@
   - text: ，turn 2：
   - code: token-meter
   - text: ）。这一轮到此结束。
-- 'button "Tool call get_goal · {}"':
+- button "Tool call Read current goal":
   - img
   - img
-  - text: "Tool call get_goal · {}"
+  - text: Tool call Read current goal
 - paragraph: 两个 turn 均已完成，目标达成，标记 goal 为完成。
-- button "Tool call update_goal · goal-{{uuid}}":
+- button "Tool call Complete goal":
   - img
   - img
-  - text: Tool call update_goal · goal-{{uuid}}
+  - text: Tool call Complete goal
 - 'button "Context injection tool-goal complete: 做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的"':
   - img
   - img

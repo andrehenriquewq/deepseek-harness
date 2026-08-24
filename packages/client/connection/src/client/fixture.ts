@@ -26,6 +26,9 @@ import type {
   SessionId,
   TodoItem,
 } from '@deepseek-ai/dsh-session/types'
+// Type-only: merges the Code Mode sub-dispatch events into SessionEventMap, so
+// this fixture's viewFor narrows them the way the host's does.
+import type {} from '@deepseek-ai/dsh-tools/types'
 // Type-only: the brand constructor is host-side; the fixture casts at its
 // wire-fabrication boundary (the schema layer's one-cast-point posture).
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
@@ -528,8 +531,8 @@ function buildAlphaLog(): SessionEvent[] {
   // shorter than READ_SAMPLE_TOTAL), with a `ts` language hint the shiki path
   // highlights. Named `read`, so it exercises the keyed ReadRow registration.
   // The render-site fallback ROW SHAPE (a read call on the generic flattened
-  // path) is covered by the turn 65 run_code read sub-dispatches, which
-  // session.ts folds with resultView: null; the fallback-row + read-CARD
+  // path) is covered by the turn 65 run_code read sub-dispatches, whose settle
+  // carries no result view (see viewFor); the fallback-row + read-CARD
   // combination is pinned by the web_fetch case in read-card.spec.tsx, not by
   // this fixture. The read render intent is result-side only, so its pending
   // call stays a generic `kind: 'read'` card; presentResult carries the
@@ -721,10 +724,24 @@ function presentResult(name: string, argsRaw: string, resultText: string): ToolR
   }
 }
 
-/** Host-side viewFor mirror: tool/call presents from its own args; tool/result back-scans the log for the paired call. */
+/**
+ * Host-side viewFor mirror: tool/call presents from its own args; tool/result
+ * back-scans the log for the paired call; a `run_code` sub-dispatch start
+ * presents from the arguments its own event carries, so a nested row reaches
+ * the same tool-owned pending card a native row does.
+ */
 function viewFor(event: SessionEvent, log: readonly SessionEvent[]): ToolEventView | undefined {
   if (event.type === 'tool/call') {
     const view = presentCall(event.data.name, event.data.arguments)
+    return view === undefined ? undefined : { for: 'call', view }
+  }
+  // Call side only, unlike the host: this fixture's result presenters answer by
+  // tool NAME with authored sample payloads (the read window, the search
+  // matches), which describe turns 67-69's own files rather than whatever a
+  // sub-call touched. A sub-dispatch settle therefore keeps the raw-content
+  // fallback, which is also the shape the flattened generic row needs covered.
+  if (event.type === 'tool/code-dispatch-start') {
+    const view = presentCall(event.data.name, JSON.stringify(event.data.arguments))
     return view === undefined ? undefined : { for: 'call', view }
   }
   if (event.type === 'tool/result') {

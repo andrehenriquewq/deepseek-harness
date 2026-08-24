@@ -88,6 +88,8 @@ producer 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 
 - **纯函数。** 这些方法在实时流式输出和会话日志回放时都会运行，因此必须是 `args`（加 result）的纯函数——不做 I/O、不读会话状态、不用时钟／随机数。diff 从 args 派生（`write` 使用 `oldText: null`，因为调用时的展示器没有文件先前内容）；会话上下文由 UI 适配器而非工具提供。如果你发现自己想在 `presentCall` 内获取文件旧内容或工作目录，请停下：那属于持久结果元数据或适配器，不属于展示器。
 - **UI 格式不进入模型结果。** 围栏 ` ```console ` 块、diff、相对化路径均不应仅为服务 UI 而进入规范值或 Native 内容。`output.render` 负责模型可见的自然语言；`presentationMeta` 和卡片展示器负责可回放的 UI 状态。`terminal` 结果视图携带原始输出，由适配器按需添加回退格式。
 - **`defineTool` 对展示路径做软校验。** 格式错误或旧版日志中的参数会使包装器返回 `undefined`（通用回退）而非抛异常——展示绝不能导致回放崩溃。
+- **展示是 harness 的职责，不是模型的。** 绝不要为了 UI 标签而新增参数。模型看得见的字段就是它会去填的字段，而 Gemini 系模型正是填了那个字段、却没有给出 payload，直接让整轮对话作废（[只有前言的工具调用](../../.agents/notes/implemented/bug-fix/2026-08-22-preamble-only-tool-calls.zh.md)）。请从你的工具本就需要的操作性参数推导标签。
+- **你的 presenter 同样会为 Code Mode 子调用运行。** `tool/code-dispatch-start` 与 `tool/code-dispatch` 会用 bridge 派发的参数解析你的 `presentCall`/`presentResult`，因此 `run_code` 程序调用你的工具时渲染出的卡片，与模型原生调用时完全相同，父级 `run_code` 行也会把你的调用报告为它当前的活动。子派发的结算事件不带 `meta`，因此从 `presentationMeta` 投影出的结果视图在那里不可用，子调用回退为通用正文——始终生效的是 call view。
 
 中性词汇定义在 `dsh-tools` 中；工具绝不导入 UI 或传输类型。host/client 运行时将每个 `card` 映射到各自的视图。设计与原因见[渲染意图联合体 Agent Note](../../.agents/notes/implemented/architecture/2026-07-02-tool-render-intent-union.zh.md)；`dsh-tool-fs`（generic/diff）和 `dsh-tool-bash`（terminal）是参考实现。
 

@@ -2637,6 +2637,9 @@ describe('defineTool validation (the runtime-validation Agent Note, part 1)', ()
     ['a blank preamble', ['missing required property "command"'], { description: '   ' }],
     ['a violation that is not a missing property', ['"command" must be a string'], { description: 'Run it', command: 7 }],
     ['non-object arguments', ['missing required property "command"'], 'command'],
+    // No violations at all: the directive has nothing to name, and the caller
+    // still gets the (empty) plain list rather than a dangling sentence.
+    ['no violations at all', [], { description: 'Run it' }],
   ])('ToolArgsError leaves the plain violation list alone for %s', (_name, violations, args) => {
     const err = new ToolArgsError(violations, args)
     expect(err.message).toBe(`invalid arguments: ${violations.join('; ')}`)

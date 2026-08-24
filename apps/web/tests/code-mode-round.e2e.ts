@@ -107,12 +107,25 @@ describe('web e2e: Code Mode round renders nested sub-calls', () => {
     // non-blank line as its summary (the presentCall contract).
     const codeRow = page.locator('[data-variant="code"]').first()
     await codeRow.waitFor({ timeout: 10_000 })
+    // The recorded program opens with a newline, so its arguments yield no
+    // summary text of their own; the row falls back to the label run_code's
+    // own presenter derived from the program. Every word on this row came
+    // from the harness — the model sent `code` and nothing else.
+    expect(await codeRow.textContent()).toContain('const bashResult = await tools.bash({')
     // Nested rows are visible WITHOUT any expand interaction, inside the
     // sub-call nest, each rendered by the same components as native rows:
     // the bash sub-call landed in the bash sample registration.
     const nest = page.locator('[data-subcalls]').first()
     await nest.waitFor({ timeout: 10_000 })
-    expect(await nest.locator('[data-sample="bash"]').count()).toBeGreaterThanOrEqual(1)
+    const bashRow = nest.locator('[data-sample="bash"]').first()
+    await bashRow.waitFor({ timeout: 10_000 })
+    // The sub-call carries its OWN tool's terminal card: the host resolved
+    // the sub-dispatch through the same presenter a native bash call uses,
+    // which is the only thing that makes this nested row expandable and puts
+    // the command's captured output under it.
+    expect(await bashRow.getAttribute('data-expandable')).toBe('true')
+    await expect.poll(() => nest.getByText('CODE_ROUND_OK', { exact: false }).count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1)
     // The failing read sub-call wears the same error state a native failed
     // row wears (the recorded program tolerates a read of missing.txt).
     expect(await nest.locator('[data-state="error"]').count()).toBeGreaterThanOrEqual(1)

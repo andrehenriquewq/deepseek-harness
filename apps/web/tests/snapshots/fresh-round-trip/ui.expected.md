@@ -20,10 +20,10 @@
   - img
   - img
   - text: Think The user wants me to run a simple bash command and reply with "DONE".
-- button "Bash Echo the test string":
+- button "Bash echo WEB_E2E_OK":
   - img
   - img
-  - text: Bash Echo the test string
+  - text: Bash echo WEB_E2E_OK
 - button "Think The command executed successfully and output \"WEB_E2E_OK\". I just need to reply with \"DONE\".":
   - img
   - img

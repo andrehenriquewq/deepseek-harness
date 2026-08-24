@@ -14,7 +14,7 @@ import { diffCardModel } from '../models/diff-card-model.ts'
 import { searchCardModel } from '../models/search-card-model.ts'
 import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { webCardModel } from '../models/web-card-model.ts'
-import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
+import { subCallActivity, toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 
 /** Variant leading icons (figma table); all glyphs render at 14 inside the 16px leading box. */
@@ -40,6 +40,11 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
   const diff = diffCardModel(block)
   const search = searchCardModel(block)
   const web = webCardModel(block)
+  // What a still-running parent (a `run_code` program) is doing right now,
+  // read off its live sub-dispatches. It outranks the parent's own static
+  // summary — the program's first line — because that line stops being news
+  // the moment the program starts calling tools.
+  const activity = subCallActivity(block, cwd, home)
   // A failing exit status is the terminal card's own error signal (the call
   // itself settles isError:false), surfaced as the row's red state dot.
   const state = model.state === 'ok' && terminal !== null && terminalFailed(terminal)
@@ -56,7 +61,7 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
       // A terminal presenter's description is the contract's above-card text, so
       // it outranks the args-derived summary here exactly as it does in BashRow;
       // a search result view's replacement title outranks it the same way.
-      summary={terminal?.description ?? search?.title ?? model.summary}
+      summary={terminal?.description ?? search?.title ?? activity ?? model.summary}
       // Single-file tools never expose an args body — the path link is the only
       // args interaction. A card is not an args body: a read/write/edit row is
       // single-file AND carries a card, so the card expands under the path link.

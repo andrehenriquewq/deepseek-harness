@@ -4,7 +4,9 @@
  * presenter keeps raw result content out of the view payload, and a throwing
  * presenter soft-falls to no view (the event still ships). Result pairing
  * works both through the live open-call table and the backscan fallback after
- * turn/end cleared it.
+ * turn/end cleared it. A `run_code` sub-dispatch resolves its own presenter
+ * from its own payload, so a nested call reaches the same card a native one
+ * does without the model authoring anything but the program.
  */
 
 import { describe, expect, it, vi } from 'vitest'
@@ -166,6 +168,49 @@ describe('mux live view computation', () => {
     expect('view' in (byCall.get('tool/call:c-boom') ?? {})).toBe(false)
     // Result pairing through the live table: presentResult saw the call's args.
     expect(byCall.get('tool/result:c-gen')?.view).toEqual({ for: 'result', view: { card: 'generic', title: 'gen done' } })
+  })
+
+  it('presents run_code sub-dispatches from their own payload, with the same fallbacks', async () => {
+    const { ctx } = await harness()
+    const api = createApiProxy(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
+    const abort = new AbortController()
+    const stream = api.events.mux({ rpcId: RpcId('t-mux-sub'), payload: {} }, abort.signal)
+    const collected = collect(stream, 8, abort)
+
+    const session = ctx.sessions.create()
+    const root = CallId('c-run')
+    session.append('turn/start', { turn: 1 })
+    session.append('tool/call', { turn: 1, step: 1, callId: root, name: 'call-only', arguments: '{"code":"await tools.term({})"}' })
+    const dispatch = (n: number, name: string, args: unknown, isError = false): void => {
+      const subCallId = CallId(`${String(root)}:code:${n}`)
+      appendExtension(session, 'tool/code-dispatch-start', { rootCallId: root, parentCallId: root, subCallId, name, arguments: args })
+      appendExtension(session, 'tool/code-dispatch', {
+        rootCallId: root, parentCallId: root, subCallId, name, arguments: args,
+        isError, content: [{ type: 'text', text: 'ok' }],
+      })
+    }
+    // The tool declares both presenters: the sub-call reaches its own card on
+    // both sides, with the arguments the bridge logged.
+    dispatch(1, 'term', { cmd: 'pnpm test' })
+    // No presenter at all: the documented generic fallback, no view field.
+    dispatch(2, 'plain', {})
+    // A throwing presenter must not cost the sub-dispatch its event.
+    dispatch(3, 'boom', {})
+
+    const frames = await collected
+    const byKey = new Map(frames
+      .filter(f => f.type === 'session/event')
+      .filter(f => f.event.type === 'tool/code-dispatch-start' || f.event.type === 'tool/code-dispatch')
+      .map(f => [`${f.event.type}:${String((f.event.data as { subCallId: unknown }).subCallId)}`, f]))
+
+    expect(byKey.get(`tool/code-dispatch-start:${String(root)}:code:1`)?.view)
+      .toEqual({ for: 'call', view: { card: 'terminal', title: 'pnpm test' } })
+    expect(byKey.get(`tool/code-dispatch:${String(root)}:code:1`)?.view)
+      .toEqual({ for: 'result', view: { card: 'terminal', output: 'done' } })
+    expect('view' in (byKey.get(`tool/code-dispatch-start:${String(root)}:code:2`) ?? {})).toBe(false)
+    expect('view' in (byKey.get(`tool/code-dispatch:${String(root)}:code:2`) ?? {})).toBe(false)
+    expect(byKey.get(`tool/code-dispatch-start:${String(root)}:code:3`)).toBeDefined()
+    expect('view' in (byKey.get(`tool/code-dispatch-start:${String(root)}:code:3`) ?? {})).toBe(false)
   })
 
   it('serves history entries with call/result views, backscan pairing, and soft-falls', async () => {

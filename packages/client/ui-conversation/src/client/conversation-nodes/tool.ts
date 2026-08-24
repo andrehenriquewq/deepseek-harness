@@ -87,7 +87,10 @@ function childCall(match: ConversationMatch, data: DispatchData): RunningToolCal
     turn: locationTurn(match),
     step: locationStep(match),
     time: match.event.time,
-    callView: null,
+    // A sub-call carries the host-computed view of its OWN tool, exactly as a
+    // root call does: the dispatch events name the tool and its arguments, so
+    // the tool's presenter runs on them and the sub-row draws the same card.
+    callView: match.view?.for === 'call' ? match.view.view : null,
     subCalls: [],
   }
 }
@@ -102,8 +105,8 @@ function childResult(match: ConversationMatch, data: DispatchData, previous?: To
     callTime: previous?.time ?? null,
     content: data.content ?? [],
     isError: data.isError === true,
-    callView: null,
-    resultView: null,
+    callView: previous?.callView ?? null,
+    resultView: match.view?.for === 'result' ? match.view.view : null,
     subCalls: [],
   }
 }

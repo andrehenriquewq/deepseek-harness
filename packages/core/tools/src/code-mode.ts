@@ -644,8 +644,11 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         exec.signal.removeEventListener('abort', onOuterAbort)
       }
     },
-    // The model-authored description is the call's always-visible UI label
-    // (the bash `description` precedent); the program itself rides rawInput.
+    // The program's first line is the call's always-visible UI label; the
+    // program itself rides rawInput. The model authors no summary — a UI reads
+    // a running program's activity off its logged sub-dispatches, each
+    // presented by the tool it names, so nothing here depends on the model
+    // writing prose about its own call.
     presentCall: args => ({
       card: 'generic',
       title: runCodeTitle(args.code),

@@ -207,6 +207,50 @@ function deriveBody(variant: ToolRowVariant, argsRaw: string): string | null {
 }
 
 /**
+ * The always-visible label the tool itself declared for this call, shared by
+ * every {@link ToolCallView} variant. The view rides the untrusted wire frame
+ * (the host schema locks only the `for` discriminant), so a missing or blank
+ * title reads as "the tool declared none" rather than blanking a row.
+ * @param block - RunningToolCall or ToolResultNode off the snapshot caches.
+ * @returns the declared title, or undefined when the call carries no usable one.
+ */
+function callViewTitle(block: ToolCallBlock): string | undefined {
+  const title: unknown = block.callView?.title
+  return typeof title === 'string' && title !== '' ? title : undefined
+}
+
+/** Resolve a call block's wire tool name from either lifecycle form. */
+function blockToolName(block: ToolCallBlock): string {
+  return 'kind' in block ? block.call?.name ?? '' : block.name
+}
+
+/**
+ * The label of what a still-running parent call is doing RIGHT NOW: the
+ * newest of its child calls, preferring one that has not settled yet.
+ *
+ * This is how a `run_code` row reports progress. The program authors no
+ * commentary — the model supplies only `code` — so the parent's activity is
+ * read from the sub-dispatches it actually made, through the same presenters
+ * that label those calls when a model issues them natively. A parent with no
+ * children yet, and any settled parent (its own outcome is the row's subject),
+ * keep their own summary.
+ * @param block - the parent RunningToolCall or ToolResultNode.
+ * @param cwd - session workspace root; workspace-rooted path labels display relative to it.
+ * @param home - host account home; a leftover POSIX home path displays as `~`.
+ * @returns the current child's label, or null when the row should keep its own summary.
+ */
+export function subCallActivity(block: ToolCallBlock, cwd?: string, home?: string): string | null {
+  if ('kind' in block) return null
+  const children = block.subCalls
+  let running: ToolCallBlock | undefined
+  for (const child of children) if (!('kind' in child)) running = child
+  const current = running ?? children[children.length - 1]
+  if (current === undefined) return null
+  return callViewTitle(current)
+    ?? toolRowModel(blockToolName(current), current, cwd, home).summary
+}
+
+/**
  * Derive the full row model from a frozen call slice.
  * @param toolName - wire tool name (dispatch-supplied; survives windowless results).
  * @param block - RunningToolCall or ToolResultNode off the snapshot caches.
@@ -225,11 +269,18 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     ? block.callId
     : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)
   const toolTitle = TOOL_TITLES[toolName]
-  // Others keeps the static "Tool call" title (figma literal); the real tool
-  // name rides the mutable summary slot unless the tool owns a specific title.
-  const summary = variant === 'others' && toolName !== '' && toolTitle === undefined
-    ? `${toolName} · ${base}`
-    : base
+  const declared = callViewTitle(block)
+  // Others keeps the static "Tool call" title (figma literal), which names no
+  // tool, so the mutable summary slot is where the tool names itself: its
+  // declared call title says what THIS call does ("Update todo list"), and
+  // without one the wire name and first string argument are all the row can
+  // say. A classified variant's title and icon already name the act, so its
+  // slot carries the specific value instead — unless the arguments yielded
+  // none (a program whose first line is blank), where the tool's own label
+  // beats an empty slot.
+  const summary = variant === 'others' && toolTitle === undefined
+    ? declared ?? (toolName === '' ? base : `${toolName} · ${base}`)
+    : base === '' ? declared ?? base : base
   // The empty string is "no text" for both derived result fields: a settled
   // call with blank content has nothing to expand, and a blank first line
   // would erase the collapsed error row's summary slot.

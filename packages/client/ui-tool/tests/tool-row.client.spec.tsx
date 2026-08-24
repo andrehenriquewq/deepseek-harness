@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { classifyTool, resultText, toolRowModel } from '../src/client/tool/models/tool-call-model.ts'
+import { classifyTool, resultText, subCallActivity, toolRowModel } from '../src/client/tool/models/tool-call-model.ts'
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
@@ -108,6 +108,73 @@ describe('tool-call-model', () => {
     expect(toolRowModel('x', running({ argsRaw: 'not json' })).summary).toBe('x · not json')
     expect(toolRowModel('x', running({ argsRaw: '' })).summary).toBe('x · c1')
     expect(toolRowModel('', running({ argsRaw: '' })).summary).toBe('c1')
+  })
+
+  it('lets an unclassified tool name its own call through the declared view title', () => {
+    const declared = (title: unknown) => toolRowModel('todo_write', running({
+      name: 'todo_write',
+      argsRaw: '{"todos":[]}',
+      callView: { card: 'generic', title } as RunningToolCall['callView'],
+    })).summary
+    expect(declared('Update todo list')).toBe('Update todo list')
+    // Wire data: a blank or absent title is "the tool declared none", not a
+    // blank row — the raw name/args fallback stands.
+    expect(declared('')).toBe('todo_write · {"todos":[]}')
+    expect(declared(undefined)).toBe('todo_write · {"todos":[]}')
+    // A classified variant already names the act; its summary stays the value.
+    expect(toolRowModel('read', running({
+      name: 'read',
+      argsRaw: '{"path":"src/a.ts"}',
+      callView: { card: 'generic', title: 'Read src/a.ts', kind: 'read' },
+    })).summary).toBe('src/a.ts')
+    // A tool with an owned static title keeps its own summary rule too.
+    expect(toolRowModel('cordis_run', running({
+      name: 'cordis_run',
+      argsRaw: '{"id":"dyn-1"}',
+      callView: { card: 'generic', title: 'Run Cordis Plugin dyn-1' },
+    })).summary).toBe('dyn-1')
+  })
+
+  it('falls back to the declared title when the arguments yield no summary text', () => {
+    // A program whose first line is blank — the shape a model emits when it
+    // opens the argument with a newline — leaves the code row's args-derived
+    // summary empty. The tool's own presenter already answers with the first
+    // NON-blank line, so the row shows that instead of nothing.
+    const argsRaw = JSON.stringify({ code: '\nconst files = await tools.glob({})\n' })
+    expect(toolRowModel('run_code', running({ name: 'run_code', argsRaw })).summary).toBe('')
+    expect(toolRowModel('run_code', running({
+      name: 'run_code',
+      argsRaw,
+      callView: { card: 'generic', title: 'const files = await tools.glob({})', kind: 'execute' },
+    })).summary).toBe('const files = await tools.glob({})')
+  })
+
+  it('reports a running parent call by what its sub-dispatches are doing', () => {
+    const child = (over: Partial<RunningToolCall>): RunningToolCall => running({ callId: 'c1:code:1', ...over })
+    const parent = (subCalls: RunningToolCall['subCalls']): RunningToolCall => running({
+      name: 'run_code', argsRaw: '{"code":"await tools.read({})"}', subCalls,
+    })
+    // The tool's own declared label wins: nothing here came from the model.
+    expect(subCallActivity(parent([
+      child({ callId: 'c1:code:1', name: 'read', argsRaw: '{"path":"a.ts"}', callView: { card: 'generic', title: 'Read a.ts', kind: 'read' } }),
+    ]))).toBe('Read a.ts')
+    // A sub-tool with no declared view falls back to the args-derived summary
+    // its own row would show, so the parent is never left blank.
+    expect(subCallActivity(parent([
+      child({ callId: 'c1:code:1', name: 'bash', argsRaw: '{"command":"pnpm test"}' }),
+    ]))).toBe('pnpm test')
+    // The newest STILL-RUNNING child is the current activity, even when a
+    // later-numbered sibling already settled.
+    const settledSecond = result({ callId: 'c1:code:2', call: { name: 'read', argsRaw: '{"path":"b.ts"}' } })
+    expect(subCallActivity(parent([
+      child({ callId: 'c1:code:1', name: 'bash', argsRaw: '{"command":"pnpm test"}' }),
+      settledSecond as unknown as RunningToolCall,
+    ]))).toBe('pnpm test')
+    // All children settled: the last one is what the parent last did.
+    expect(subCallActivity(parent([settledSecond as unknown as RunningToolCall]))).toBe('b.ts')
+    // No children yet, and any settled parent: the row keeps its own summary.
+    expect(subCallActivity(parent([]))).toBeNull()
+    expect(subCallActivity(result({ subCalls: [settledSecond] }))).toBeNull()
   })
 
   it('joins multi-query web search arguments in the summary', () => {
@@ -409,6 +476,24 @@ describe('GenericToolCard', () => {
     expect(view.getByText('Bash')).toBeTruthy()
     expect(view.getByText('ls -la')).toBeTruthy()
     expect(view.container.querySelector('[data-variant="bash"]')).not.toBeNull()
+  })
+
+  it('shows a running run_code row what its current sub-dispatch is doing', () => {
+    const child = (over: Partial<RunningToolCall>): RunningToolCall => running({ callId: 'c1:code:1', ...over })
+    const parent = (subCalls: RunningToolCall['subCalls']): RunningToolCall => running({
+      name: 'run_code', argsRaw: '{"code":"await tools.glob({ pattern: \\"**/*.ts\\" })"}', subCalls,
+    })
+    // No sub-dispatch yet: the program's first line is all there is to show.
+    const idle = render(<GenericToolCard {...props('run_code', parent([]))} />)
+    expect(idle.getByText('await tools.glob({ pattern: "**/*.ts" })')).toBeTruthy()
+    cleanup()
+    // A sub-dispatch started: the row reports the tool's own declared label,
+    // which the harness derived from the dispatched arguments.
+    const busy = render(<GenericToolCard {...props('run_code', parent([
+      child({ name: 'glob', argsRaw: '{"pattern":"**/*.ts"}', callView: { card: 'generic', title: 'Glob **/*.ts', kind: 'search' } }),
+    ]))} />)
+    expect(busy.getByText('Glob **/*.ts')).toBeTruthy()
+    expect(busy.queryByText('await tools.glob({ pattern: "**/*.ts" })')).toBeNull()
   })
 
   it('unknown tools land on the others variant titled Tool call', () => {

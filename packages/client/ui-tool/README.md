@@ -16,6 +16,8 @@ The package also fills `conversation.details.tool` with `ToolDetails`. The row a
 
 Generic rows classify known Tool names into search, read, shell, write, edit, code, or generic variants. Running, successful, failed, and interrupted lifecycle states come only from the frozen call/result slice. File paths resolve against the session `cwd` only when the user invokes the Host open-file callback; presentation code does not read Session services.
 
+Row text is derived, never authored by a model. A classified variant names the act through its title and icon and puts the salient argument in the summary slot; an unclassified row takes the summary from the tool's own declared call-view title, falling back to the wire name plus its first string argument. A running parent call — a `run_code` program — reports what it is doing right now from its newest unsettled Code Dispatch child, labelled by that child's declared view or, when the child's tool declares none, by the same args-derived summary the child's own row shows. A parent with no children yet, and every settled parent, keep their own summary.
+
 ## Atomic Tool views
 
 An owning business package registers its wire Tool name into `tool.call.toolview`:

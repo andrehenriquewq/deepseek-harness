@@ -8,8 +8,9 @@
 // expanded body — with a capped search's recovery footer below the card. A
 // search declares its render intent result-time only, so a running row is the
 // summary line alone; a settled call with no search card (an errored search, a
-// nested run_code sub-dispatch, a legacy generic result) surfaces its
-// model-facing text through ToolRow's Output section instead.
+// nested run_code sub-dispatch, whose logged settle carries no result metadata
+// for the card to project, a legacy generic result) surfaces its model-facing
+// text through ToolRow's Output section instead.
 
 import type { Context } from '@deepseek-ai/cordis'
 import { IconSearchOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'

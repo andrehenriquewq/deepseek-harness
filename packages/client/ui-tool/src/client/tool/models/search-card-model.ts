@@ -122,8 +122,10 @@ function flattenContent(content: readonly { type: string; text?: string }[]): st
  * does not know, which arrives over the wire and cannot be trusted to be one of
  * the compiled variants, a `card: 'search'` view whose `shape` is neither
  * `matches` nor `paths` (equally untrusted wire data), and a generic result a
- * `grep`/`glob` failure or nested `run_code` dispatch produces (its text keeps
- * the generic path).
+ * `grep`/`glob` failure produces (its text keeps the generic path). A nested
+ * `run_code` sub-dispatch runs the same presenter as a native call, but its
+ * logged settle carries no result metadata for the card to project, so it
+ * keeps the generic path too.
  * @param block - RunningToolCall or ToolResultNode off the snapshot caches.
  * @returns the search-card props, or null for the generic path.
  */

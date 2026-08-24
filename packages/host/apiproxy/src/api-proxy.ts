@@ -679,13 +679,17 @@ function matchesQuestions(payload: QuestionResponsePayload, pending: PendingQues
 }
 
 /**
- * Compute the render intent for a tool/call or tool/result event through the
- * presenters registered at this moment; every other event type gets none. A
- * result's presenter needs its call's parsed args — `argsFor` supplies them
- * (live: the per-session call table; history: an in-page backscan), returning
- * undefined when the pairing is unavailable (e.g. the call fell off the page),
- * which soft-falls to no view. Presenter or JSON.parse throws also soft-fall:
- * the client's documented default (generic JSON card) covers every miss.
+ * Compute the render intent for a native call/result pair or one `run_code`
+ * sub-dispatch pair through the presenters registered at this moment; every
+ * other event type gets none. A native result's presenter needs its call's
+ * parsed args — `argsFor` supplies them (live: the per-session call table;
+ * history: an in-page backscan), returning undefined when the pairing is
+ * unavailable (e.g. the call fell off the page), which soft-falls to no view.
+ * A sub-dispatch needs no pairing: both its events carry the JSON-normalized
+ * `arguments` the bridge dispatched, so a sub-call resolves its own presenter
+ * from its own payload and reaches the same tool-owned card a native call
+ * does. Presenter or JSON.parse throws also soft-fall: the client's documented
+ * default (generic JSON card) covers every miss.
  */
 function viewFor(
   ctx: Context,
@@ -703,6 +707,20 @@ function viewFor(
       const { name, arguments: raw } = event.data as ToolCallData
       const view = ctx.tools.get(name, scope)?.presentCall?.(JSON.parse(raw))
       return view === undefined ? undefined : { for: 'call', view }
+    }
+    if (event.type === 'tool/code-dispatch-start') {
+      const { name, arguments: args } = event.data
+      const view = ctx.tools.get(name, scope)?.presentCall?.(args)
+      return view === undefined ? undefined : { for: 'call', view }
+    }
+    if (event.type === 'tool/code-dispatch') {
+      const { name, arguments: args, content, isError } = event.data
+      // No `meta`: the dispatch log records the sub-call's model-facing
+      // outcome only, so a presenter that projects its card from result
+      // metadata (grep/glob's search card) returns undefined here and the
+      // sub-call keeps the documented generic body.
+      const view = ctx.tools.get(name, scope)?.presentResult?.(args, { content, isError })
+      return view === undefined ? undefined : { for: 'result', view }
     }
     if (event.type === 'tool/result') {
       const { message, meta } = event.data

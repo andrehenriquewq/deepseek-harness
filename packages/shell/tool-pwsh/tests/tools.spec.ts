@@ -312,6 +312,11 @@ describe('registration', () => {
       run_in_background: { type: 'boolean' },
     })
     expect(schema?.parameters.required).toEqual(['command'])
+    // Operational properties only — no presentation-only argument, for the
+    // reason bash's twin records
+    // ([preamble-only calls](../../../../.agents/notes/implemented/bug-fix/2026-08-22-preamble-only-tool-calls.md)).
+    expect(Object.keys(schema?.parameters.properties as Record<string, unknown>))
+      .toEqual(['command', 'timeoutMs', 'workdir', 'run_in_background'])
     const prompt = renderPrompt(await ctx.systemPrompt.assemble())
     expect(prompt).toContain('Non-zero exits are reported as `[exit code: N]` markers')
     expect(prompt).toContain('without a signal marker')
@@ -356,7 +361,6 @@ describe('execution through the bash seam', () => {
     Object.assign(agent.session.header, { cwd: '/sessions/s1' })
     const result = await call(ctx, 'pwsh', {
       command: 'Write-Output hi',
-      description: 'say hi',
       timeoutMs: 1234,
     }, agent)
     expect(result.isError).toBe(false)
@@ -377,16 +381,16 @@ describe('execution through the bash seam', () => {
     bash.handler = () => runResult('ok\n')
     const agent = registerFakeAgent(ctx, 'session-cwd')
     Object.assign(agent.session.header, { cwd: '/sessions/s1' })
-    await call(ctx, 'pwsh', { command: 'pwd', description: 'cwd', workdir: 'sub/dir' }, agent)
+    await call(ctx, 'pwsh', { command: 'pwd', workdir: 'sub/dir' }, agent)
     expect(bash.requests[0]?.workdir).toBe(resolvePath('/sessions/s1', 'sub/dir'))
-    await call(ctx, 'pwsh', { command: 'pwd', description: 'cwd', workdir: resolvePath('/abs/path') }, agent)
+    await call(ctx, 'pwsh', { command: 'pwd', workdir: resolvePath('/abs/path') }, agent)
     expect(bash.requests[1]?.workdir).toBe(resolvePath('/abs/path'))
   })
 
   it('omits workdir and the session id without an agent, so executor defaulting applies', async () => {
     const { ctx, bash } = await setup()
     bash.handler = () => runResult('ok\n')
-    await call(ctx, 'pwsh', { command: 'Write-Output ok', description: 'ok' })
+    await call(ctx, 'pwsh', { command: 'Write-Output ok' })
     expect(bash.requests[0]).not.toHaveProperty('workdir')
     const dshEnv = bash.requests[0]?.dshEnv
     expect(dshEnv).toBeDefined()
@@ -403,7 +407,7 @@ describe('execution through the bash seam', () => {
       signal: controller.signal,
       callId: CallId('call-signal'),
       name: 'pwsh',
-      arguments: { command: 'Write-Output ok', description: 'ok' },
+      arguments: { command: 'Write-Output ok' },
     })
     expect(bash.requests[0]?.signal).toBe(controller.signal)
   })
@@ -415,7 +419,7 @@ describe('execution through the bash seam', () => {
       stderr: { text: 'err\n', truncated: false },
       timeoutMs: 5000,
     })
-    const result = await call(ctx, 'pwsh', { command: 'failing', description: 'fail' })
+    const result = await call(ctx, 'pwsh', { command: 'failing' })
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected pwsh success')
     expect(result.value).toEqual({
@@ -434,11 +438,11 @@ describe('execution through the bash seam', () => {
   it('renders a clean exit without a marker and an empty body as (no output)', async () => {
     const { ctx, bash } = await setup()
     bash.handler = () => runResult('hi\n')
-    const clean = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'say hi' })
+    const clean = await call(ctx, 'pwsh', { command: 'Write-Output hi' })
     expect(text(clean)).toBe('hi\n')
 
     bash.handler = () => runResult('')
-    const empty = await call(ctx, 'pwsh', { command: 'Write-Output -NoNewline ""', description: 'nothing' })
+    const empty = await call(ctx, 'pwsh', { command: 'Write-Output -NoNewline ""' })
     expect(text(empty)).toBe('(no output)')
   })
 
@@ -448,7 +452,7 @@ describe('execution through the bash seam', () => {
       stderr: { text: 'err\n', truncated: false },
       exitCode: 1,
     })
-    const result = await call(ctx, 'pwsh', { command: 'fail', description: 'fail' })
+    const result = await call(ctx, 'pwsh', { command: 'fail' })
     expect(text(result)).toBe('[stderr]\nerr\n[exit code: 1]')
   })
 
@@ -458,7 +462,7 @@ describe('execution through the bash seam', () => {
       stderr: { text: 'err\n', truncated: false },
       exitCode: 1,
     })
-    const result = await call(ctx, 'pwsh', { command: 'fail', description: 'fail' })
+    const result = await call(ctx, 'pwsh', { command: 'fail' })
     expect(text(result)).toBe('out\n[stderr]\nerr\n[exit code: 1]')
   })
 
@@ -468,11 +472,11 @@ describe('execution through the bash seam', () => {
       stdout: { text: 'tail', truncated: true, spillPath: '/spill/out.log' },
       stderr: { text: '', truncated: false },
     })
-    const result = await call(ctx, 'pwsh', { command: 'noisy', description: 'noise' })
+    const result = await call(ctx, 'pwsh', { command: 'noisy' })
     expect(text(result)).toBe('tail\n[output truncated; full output: /spill/out.log]')
 
     bash.handler = () => runResult('', { timedOut: true, exitCode: null, signal: 'SIGTERM', timeoutMs: 500 })
-    const timedOut = await call(ctx, 'pwsh', { command: 'slow', description: 'slow' })
+    const timedOut = await call(ctx, 'pwsh', { command: 'slow' })
     // A timeout kill carries both facts, mirroring the bash tool's markers.
     expect(text(timedOut)).toBe('(no output)\n[timed out after 500ms]\n[killed by signal: SIGTERM]')
   })
@@ -483,14 +487,14 @@ describe('execution through the bash seam', () => {
       stdout: { text: 'tail', truncated: true },
       stderr: { text: '', truncated: false },
     })
-    const result = await call(ctx, 'pwsh', { command: 'noisy', description: 'noise' })
+    const result = await call(ctx, 'pwsh', { command: 'noisy' })
     expect(text(result)).toBe('tail\n[output truncated; full output: (unavailable)]')
   })
 
   it('translates an aborted run into the TOOL_ABORTED HarnessError', async () => {
     const { ctx, bash } = await setup()
     bash.handler = () => runResult('', { aborted: true, exitCode: null, signal: 'SIGTERM' })
-    const result = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', description: 'sleep' })
+    const result = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60' })
     expect(result.isError).toBe(true)
     expect(result.error).toMatchObject({ info: { name: 'AbortError', code: TOOL_ABORTED } })
   })
@@ -502,7 +506,7 @@ describe('per-call sandbox policy resolution', () => {
     const sessionCwd = mkdtempSync(join(tmpdir(), 'dsh-tool-pwsh-policy-'))
     const agent = registerFakeAgent(ctx, 'policy-session')
     Object.assign(agent.session.header, { cwd: sessionCwd })
-    const result = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'say hi' }, agent)
+    const result = await call(ctx, 'pwsh', { command: 'Write-Output hi' }, agent)
     expect(result.isError).toBe(false)
     // The policy's workspace root is the session cwd canonicalized by the
     // policy service (realpath + resolve), NEVER the web server's launch dir;
@@ -516,7 +520,7 @@ describe('per-call sandbox policy resolution', () => {
 
   it('falls back to the deployment policy without an agent, and omits the field entirely without a confining executor', async () => {
     const { ctx, bash } = await setupSandboxed()
-    await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'say hi' })
+    await call(ctx, 'pwsh', { command: 'Write-Output hi' })
     expect(bash.requests[0]?.sandboxPolicy).toEqual({
       mode: 'read-only',
       workspaceRoot: resolvePath(realpathSync.native(process.cwd())),
@@ -525,7 +529,7 @@ describe('per-call sandbox policy resolution', () => {
     // The base FakeBash advertises no sandboxMode, so the tool must not stamp
     // any policy (the executor defaulting stays the executor's own).
     const plain = await setup()
-    await call(plain.ctx, 'pwsh', { command: 'Write-Output hi', description: 'say hi' })
+    await call(plain.ctx, 'pwsh', { command: 'Write-Output hi' })
     expect(plain.bash.requests[0]).not.toHaveProperty('sandboxPolicy')
   })
 
@@ -545,7 +549,6 @@ describe('per-call sandbox policy resolution', () => {
 describe('sandbox escalation through ctx.approval', () => {
   const escalate = {
     command: 'Write-Output ok',
-    description: 'test escalation',
     sandbox_permissions: 'workspace-write',
     justification: 'the command needs workspace writes',
   }
@@ -562,9 +565,9 @@ describe('sandbox escalation through ctx.approval', () => {
     expect(schema.description).toContain('fails with EPERM')
 
     for (const args of [
-      { command: 'Write-Output ok', description: 'd', sandbox_permissions: 'workspace-write' },
-      { command: 'Write-Output ok', description: 'd', justification: 'why' },
-      { command: 'Write-Output ok', description: 'd', sandbox_permissions: 'workspace-write', justification: ' ' },
+      { command: 'Write-Output ok', sandbox_permissions: 'workspace-write' },
+      { command: 'Write-Output ok', justification: 'why' },
+      { command: 'Write-Output ok', sandbox_permissions: 'workspace-write', justification: ' ' },
     ]) {
       expect((await call(ctx, 'pwsh', args)).isError).toBe(true)
     }
@@ -665,7 +668,7 @@ describe('sandbox escalation through ctx.approval', () => {
   it('uses the session override for ordinary calls and evaluates widening against it', async () => {
     const { ctx, bash } = await setupSandboxed(true)
     const agent = sandboxAgent('workspace-write')
-    await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'ordinary' }, agent)
+    await call(ctx, 'pwsh', { command: 'Write-Output hi' }, agent)
     ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>('allowed-once'))
     await call(ctx, 'pwsh', { ...escalate, sandbox_permissions: 'danger-full-access' }, agent)
     expect(bash.modes).toEqual(['workspace-write', 'danger-full-access'])
@@ -675,7 +678,6 @@ describe('sandbox escalation through ctx.approval', () => {
     const { ctx } = await setupSandboxed()
     const result = await call(ctx, 'pwsh', {
       command: 'without optional sandbox facts',
-      description: 'exercise optional sandbox facts',
     })
     if (result.isError) throw new Error('expected foreground pwsh success')
     expect(result.value).toMatchObject({
@@ -697,7 +699,7 @@ describe('sandbox escalation through ctx.approval', () => {
 describe('background execution through the job runtime', () => {
   it('run_in_background acks with the job id, readable through the REAL job_output tool', async () => {
     const { ctx } = await setupWithTasks()
-    const started = await call(ctx, 'pwsh', { command: 'Write-Output bg-ok', description: 'test command', run_in_background: true })
+    const started = await call(ctx, 'pwsh', { command: 'Write-Output bg-ok', run_in_background: true })
     expect(started.isError).toBe(false)
     if (started.isError) throw new Error('expected background pwsh success')
     expect(started.value).toEqual({ kind: 'background', jobId: 'pwsh-1' })
@@ -713,7 +715,7 @@ describe('background execution through the job runtime', () => {
   it('a running background job is killable through the REAL job_kill tool', async () => {
     const { ctx, bash } = await setupWithTasks()
     bash.backgroundHandler = () => killableProcess()
-    await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', description: 'test command', run_in_background: true })
+    await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', run_in_background: true })
 
     const killed = await call(ctx, 'job_kill', { job_id: 'pwsh-1' })
     expect(text(killed)).toBe('requested cancellation of job pwsh-1')
@@ -726,7 +728,7 @@ describe('background execution through the job runtime', () => {
   it('a background job started by an agent is registered with that agent as owner', async () => {
     const { ctx } = await setupWithTasks()
     const agent = registerFakeAgent(ctx, 'sess-owner')
-    const started = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', description: 'test command', run_in_background: true }, agent)
+    const started = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', run_in_background: true }, agent)
     expect(text(started)).toBe('started background job pwsh-1')
 
     const anon = await call(ctx, 'job_output', { job_id: 'pwsh-1' })
@@ -740,7 +742,7 @@ describe('background execution through the job runtime', () => {
 
   it('fails loud when the job runtime is not loaded', async () => {
     const { ctx } = await setup() // no LocalJobRegistry / ToolTasks
-    const result = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', description: 'test command', run_in_background: true })
+    const result = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', run_in_background: true })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
   })
@@ -752,7 +754,7 @@ describe('background execution through the job runtime', () => {
     const result = await ctx.tools.execute({
       callId: CallId('call-pre-aborted'),
       name: 'pwsh',
-      arguments: { command: 'Start-Sleep -Seconds 60', description: 'test command', run_in_background: true },
+      arguments: { command: 'Start-Sleep -Seconds 60', run_in_background: true },
       signal: controller.signal,
     })
     expect(result.isError).toBe(true)
@@ -774,7 +776,7 @@ describe('background execution through the job runtime', () => {
     await ctx.plugin(ToolPwsh)
     const bash = ctx.shell as FakeBash
 
-    const result = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', description: 'test command', run_in_background: true })
+    const result = await call(ctx, 'pwsh', { command: 'Start-Sleep -Seconds 60', run_in_background: true })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('no job controller serves this agent')
     // Declare-then-execute: the failed preflight means no process ever ran.
@@ -816,7 +818,7 @@ describe('UI presentation', () => {
   it('a real execute presents a completed foreground run as a terminal card with the parsed exit pill', async () => {
     const { ctx, bash } = await setup()
     bash.handler = () => runResult('hi\n')
-    const args = { command: 'Write-Output hi', description: 'say hi' }
+    const args = { command: 'Write-Output hi' }
     const result = await call(ctx, 'pwsh', args)
     const view = ctx.tools.get('pwsh')?.presentResult?.(args, result)
     // A terminal result keeps the RAW bytes (newlines intact) a terminal
@@ -851,7 +853,7 @@ describe('UI presentation', () => {
   it('presentResult: a non-zero exit and a signal kill parse into exitCode / signal', async () => {
     const { ctx } = await setup()
     const present = ctx.tools.get('pwsh')
-    const args = { command: 'x', description: 'x' }
+    const args = { command: 'x' }
     expect(present?.presentResult?.(args, { content: [{ type: 'text', text: 'oops\n[exit code: 3]' }], isError: false }))
       .toEqual({ card: 'terminal', output: 'oops', exitCode: 3 })
     expect(present?.presentResult?.(args, { content: [{ type: 'text', text: 'gone\n[killed by signal: SIGKILL]' }], isError: false }))
@@ -860,7 +862,7 @@ describe('UI presentation', () => {
 
   it('presentResult: markers a pill CANNOT show (timeout) stay in the terminal output', async () => {
     const { ctx } = await setup()
-    const args = { command: 'x', description: 'x' }
+    const args = { command: 'x' }
     expect(ctx.tools.get('pwsh')?.presentResult?.(
       args,
       { content: [{ type: 'text', text: 'slow\n[timed out after 100ms]\n[exit code: 143]' }], isError: false },
@@ -885,7 +887,7 @@ describe('UI presentation', () => {
     ]
     for (const c of cases) {
       const rendered = renderPwshResult(c.result)
-      const out = present.presentResult!({ command: 'x', description: 'x' }, { content: [{ type: 'text', text: rendered }], isError: false })
+      const out = present.presentResult!({ command: 'x' }, { content: [{ type: 'text', text: rendered }], isError: false })
       // Drop card + output; the remaining fields are the parsed exit.
       const { card: _c, output, ...exit } = out as { card: string; output?: string; exitCode?: number; signal?: string }
       expect(exit).toEqual(c.expect)
@@ -897,7 +899,7 @@ describe('UI presentation', () => {
 
   it('presentResult: a clean exit-0 whose output ENDS in marker-like text is NOT read as a failure', async () => {
     const { ctx } = await setup()
-    const args = { command: 'Write-Output "[exit code: 5]"', description: 'print' }
+    const args = { command: 'Write-Output "[exit code: 5]"' }
     // A successful command may print marker-like text. A clean result appends no marker or
     // newline; parsing requires the leading newline emitted for real markers, so this stays exit 0.
     const out = ctx.tools.get('pwsh')!.presentResult!(args, { content: [{ type: 'text', text: '[exit code: 5]' }], isError: false })
@@ -910,7 +912,7 @@ describe('UI presentation', () => {
   it('presentResult: a run_in_background ack is a generic card and carries no exit pill', async () => {
     const { ctx } = await setup()
     const result = ctx.tools.get('pwsh')!.presentResult!(
-      { command: 'Start-Sleep -Seconds 60', description: 'long wait', run_in_background: true },
+      { command: 'Start-Sleep -Seconds 60', run_in_background: true },
       { content: [{ type: 'text', text: 'started background job pwsh-1' }], isError: false },
     )
     expect(result).toEqual({ card: 'generic', content: [{ type: 'text', text: '```console\nstarted background job pwsh-1\n```' }] })
@@ -919,7 +921,7 @@ describe('UI presentation', () => {
   it('presentResult: an isError result is a generic card (no real process exit to report)', async () => {
     const { ctx } = await setup()
     const out = ctx.tools.get('pwsh')!.presentResult!(
-      { command: 'x', description: 'x' },
+      { command: 'x' },
       { content: [{ type: 'text', text: 'tool call aborted' }], isError: true },
     )
     expect(out).toEqual({ card: 'generic', content: [{ type: 'text', text: '```console\ntool call aborted\n```' }] })
@@ -928,7 +930,7 @@ describe('UI presentation', () => {
   it('presentResult falls back to undefined for multi-block or non-text content', async () => {
     const { ctx } = await setup()
     const definition = ctx.tools.get('pwsh')
-    const args = { command: 'Write-Output hi', description: 'say hi' }
+    const args = { command: 'Write-Output hi' }
     const multi = { content: [{ type: 'text' as const, text: 'a' }, { type: 'text' as const, text: 'b' }], isError: false }
     expect(definition?.presentResult?.(args, multi as never)).toBeUndefined()
     const image = { content: [{ type: 'image' as const, text: 'a' }], isError: false }

@@ -84,7 +84,9 @@ function childCall(match: ConversationMatch, data: DispatchData): RunningToolCal
     turn: locationTurn(match),
     step: locationStep(match),
     time: match.event.time,
-    callView: null,
+    // Same host-computed presenter view a root call carries: the dispatch
+    // events name the sub-call's tool and arguments, so its own card applies.
+    callView: match.view?.for === 'call' ? match.view.view : null,
     subCalls: [],
   }
 }
@@ -103,8 +105,8 @@ function childResult(
     callTime: previous === undefined || 'kind' in previous ? null : previous.time,
     content: data.content ?? [],
     isError: data.isError === true,
-    callView: null,
-    resultView: null,
+    callView: previous?.callView ?? null,
+    resultView: match.view?.for === 'result' ? match.view.view : null,
     subCalls: [],
   }
 }

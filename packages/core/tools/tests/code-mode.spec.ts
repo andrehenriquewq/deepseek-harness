@@ -406,6 +406,12 @@ describe('mode-aware wire contribution', () => {
     expect(runCodeSchema?.description).not.toContain('`description`')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
     expect(codeParam.description).toBe('The program: the body of an async TypeScript function.')
+    // `code` is the WHOLE contract. A UI reads a running program's activity
+    // from its logged sub-dispatches, each presented by the tool it names, so
+    // no presentation-only property may be added back here.
+    expect(Object.keys((runCodeSchema?.parameters as { properties: Record<string, unknown> }).properties))
+      .toEqual(['code'])
+    expect(runCodeSchema?.parameters.required).toEqual(['code'])
   })
 
   it('emits a Python-flavored run_code schema under a python runtime (matches the SDK language)', async () => {
@@ -1306,6 +1312,14 @@ describe('the run_code dispatch bridge', () => {
       kind: 'execute',
       rawInput: 'return 1',
     })
+  })
+
+  it('falls back to the tool name when the program has no line to show', async () => {
+    const { ctx } = await setup({ mode: 'code' })
+    const tool = ctx.tools.get(RUN_CODE_NAME)!
+    // A whitespace-only program still reaches the card (the presenter runs on
+    // replayed logged args, which the executor's own validation never saw).
+    expect(tool.presentCall?.({ code: '  \n\t\n' })).toMatchObject({ title: RUN_CODE_NAME })
   })
 
   it('elides a first line too long to serve as a card title', async () => {

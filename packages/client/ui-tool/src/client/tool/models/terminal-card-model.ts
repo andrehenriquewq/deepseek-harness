@@ -52,10 +52,13 @@ export interface TerminalCardModel {
    */
   card: Pick<TerminalBlockProps, 'command' | 'cwd' | 'output' | 'exitCode' | 'signal' | 'running'>
   /**
-   * The call view's model-authored description, which the contract defines as
-   * rendering ABOVE the card (the card itself has no description slot). Absent
-   * when the presenter supplied none, or when the window dropped the call side;
-   * a row then keeps its args-derived summary.
+   * The call view's one-line description, which the contract defines as
+   * rendering ABOVE the card (the card itself has no description slot). The
+   * shell tools supply none — a command describes itself, and asking a model
+   * for a second sentence about it derails whole tool calls
+   * ([preamble-only calls](../../../../../../../.agents/notes/implemented/bug-fix/2026-08-22-preamble-only-tool-calls.md)) —
+   * so this is absent unless another terminal-card tool declares one, or when
+   * the window dropped the call side; a row then keeps its args-derived summary.
    */
   description: string | undefined
 }

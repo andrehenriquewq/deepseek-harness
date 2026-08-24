@@ -191,13 +191,13 @@ describe('Trajectory conversation Definitions', () => {
       at(4, 'tool/call', {
         turn: 1, step: 1, callId: 'root-b', name: 'parallel', arguments: '{}',
       }),
-      at(5, 'tool/code-dispatch-start', {
+      { ...at(5, 'tool/code-dispatch-start', {
         rootCallId: 'root-a',
         parentCallId: 'root-a',
         subCallId: 'child',
         name: 'read',
         arguments: { path: 'README.md' },
-      }),
+      }), view: { for: 'call', view: { card: 'generic', title: 'Read README.md', kind: 'read' } } },
       at(6, 'tool/code-dispatch', {
         rootCallId: 'root-a',
         parentCallId: 'root-a',
@@ -211,10 +211,14 @@ describe('Trajectory conversation Definitions', () => {
 
     const tools = current.eventNodes.filter(node => node.kind === 'tool-result')
     expect(tools.map(node => node.callId).sort()).toEqual(['root-a', 'root-b'])
+    // The sub-call keeps the host-computed card of its OWN tool through its
+    // settle; the settle itself carried no result view, so that stays null.
     expect(tools.find(node => node.callId === 'root-a')?.subCalls).toMatchObject([{
       kind: 'tool-result',
       callId: 'child',
       call: { name: 'read' },
+      callView: { card: 'generic', title: 'Read README.md', kind: 'read' },
+      resultView: null,
     }])
   })
 
