@@ -369,7 +369,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         return tool_call_chunks(
             "call-code-worker",
             "run_code",
-            {"code": "return 6 * 7", "description": "Compute the smoke value"},
+            {"code": "return 6 * 7"},
         )
     if prompt == WORKFLOW_PROMPT:
         assert_advertised_tool(body, "workflow")
@@ -519,7 +519,6 @@ def advanced_tool_followup(
             "run_code",
             {
                 "code": "return await tools.snapshot_double({ value: 21 })",
-                "description": "Run the temporary Plugin tool",
             },
         )
     if call_id == "advanced-code" and tool_name == "run_code":

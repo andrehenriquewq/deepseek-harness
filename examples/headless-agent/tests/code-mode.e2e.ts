@@ -95,7 +95,7 @@ function runCode(
   return harness.tools.execute({
     callId: CallId(`keyless-code-${++keylessCall}`),
     name: RUN_CODE_NAME,
-    arguments: { code, description: 'Run the e2e program' },
+    arguments: { code },
     signal,
     ...(agent === undefined ? {} : { agent }),
   })
@@ -193,7 +193,6 @@ describe('Code Mode typed values: keyless real-worker contracts', () => {
     const jobId = completion(await runCode(ctx, `
       const started = await tools.bash({
         command: "sleep 0.2; printf 'background-complete\\n'",
-        description: 'Run completion marker in background',
         run_in_background: true,
       });
       return started.jobId;
@@ -216,14 +215,14 @@ describe('Code Mode typed values: keyless real-worker contracts', () => {
     const pre = new AbortController()
     pre.abort('pre-aborted')
     const preResult = await runCode(ctx, `
-      return await tools.bash({ command: 'sleep 10', description: 'Must never start', run_in_background: true });
+      return await tools.bash({ command: 'sleep 10', run_in_background: true });
     `, pre.signal)
     expect(preResult.isError).toBe(true)
     expect(ctx.jobs.list()).toEqual([])
 
     const afterPublication = new AbortController()
     const running = runCode(ctx, `
-      const started = await tools.bash({ command: 'sleep 10', description: 'Wait for explicit task kill', run_in_background: true });
+      const started = await tools.bash({ command: 'sleep 10', run_in_background: true });
       console.log(started.jobId);
       await new Promise(() => {});
     `, afterPublication.signal)
@@ -252,7 +251,7 @@ describe('Code Mode typed values: keyless real-worker contracts', () => {
     const controller = new AbortController()
     const startedAt = Date.now()
     const pending = runCode(ctx, `
-      return await tools.bash({ command: 'sleep 10', description: 'Run cancellable foreground command' });
+      return await tools.bash({ command: 'sleep 10' });
     `, controller.signal)
     setTimeout(() => { controller.abort('stop-foreground') }, 200)
     const result = await pending

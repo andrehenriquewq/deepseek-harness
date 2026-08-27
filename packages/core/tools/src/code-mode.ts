@@ -90,9 +90,10 @@ const RUN_CODE_FLAVORS: Record<string, RunCodeFlavor> = {
 const RUN_CODE_TITLE_MAX_LENGTH = 72
 
 /**
- * The `run_code` card's always-visible label when the model omitted its own
- * summary: the program's first non-blank line, mirroring the bash card's use of
- * the command itself.
+ * The `run_code` card's always-visible label: the program's first non-blank
+ * line, mirroring the bash card's use of the command itself. A running
+ * program's live activity is derived from its sub-dispatches, not from this
+ * title.
  * @param code - the model-authored program body.
  * @returns The first non-blank line, elided at {@link RUN_CODE_TITLE_MAX_LENGTH}, or the tool name for a blank program.
  */
@@ -287,10 +288,9 @@ export interface RunCodeBridgeOptions {
 }
 
 /**
- * Build the `run_code` {@link ToolDefinition}: required `code` and
- * `description` parameters, executed through the dispatch bridge described
- * above. The
- * registry reserves it as presentation infrastructure under non-native modes,
+ * Build the `run_code` {@link ToolDefinition}: one required `code` parameter,
+ * executed through the dispatch bridge described above. The registry
+ * reserves it as presentation infrastructure under non-native modes,
  * outside the filterable global/scoped capability layers.
  * @param registry - the owning registry (sub-calls go through its `execute`,
  *   bindings cover its registered tools).

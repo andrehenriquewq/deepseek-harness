@@ -103,13 +103,13 @@ function fakeAgent(): { agent: Agent; events: { type: string; data: unknown }[] 
 async function runCode(
   ctx: Context,
   code: string,
-  extras: { agent?: Agent; signal?: AbortSignal; description?: string } = {},
+  extras: { agent?: Agent; signal?: AbortSignal } = {},
 ): Promise<ToolExecutionResult> {
   return ctx.tools.execute({
     signal: testToolSignal,
     callId: CallId('call-1'),
     name: RUN_CODE_NAME,
-    arguments: { code, description: extras.description ?? 'Run the test program' },
+    arguments: { code },
     ...extras.agent ? { agent: extras.agent } : {},
     ...extras.signal ? { signal: extras.signal } : {},
   })
@@ -425,6 +425,9 @@ describe('mode-aware wire contribution', () => {
     expect(runCodeSchema?.description).not.toContain('TypeScript')
     const codeParam = (runCodeSchema?.parameters as { properties: { code: { description: string } } }).properties.code
     expect(codeParam.description).toBe('The program: the body of an async Python function.')
+    expect(Object.keys((runCodeSchema?.parameters as { properties: Record<string, unknown> }).properties))
+      .toEqual(['code'])
+    expect(runCodeSchema?.parameters.required).toEqual(['code'])
   })
 
   it('resolves the run_code schema flavor lazily and fails loud on a language absent from the flavor table', async () => {
@@ -1312,6 +1315,29 @@ describe('the run_code dispatch bridge', () => {
       kind: 'execute',
       rawInput: 'return 1',
     })
+    // An extra presentation-only key must not become the title, and must not
+    // fail the soft presenter (the implicit parameter root stays open so a
+    // model that still emits one does not lose the card).
+    expect(tool.presentCall?.({ code: 'return 1', description: 'UI label' })).toEqual({
+      card: 'generic',
+      title: 'return 1',
+      kind: 'execute',
+      rawInput: 'return 1',
+    })
+  })
+
+  it('executes a program whose only advertised argument is `code`, and ignores a leftover description', async () => {
+    const { ctx, runtime } = await setup({ mode: 'code' })
+    runtime.behavior = () => Promise.resolve({ logs: ['ok'] })
+    const advertised = await runCode(ctx, 'return 1')
+    expect(advertised.isError).toBe(false)
+    const leftover = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('call-leftover-description'),
+      name: RUN_CODE_NAME,
+      arguments: { code: 'return 1', description: 'UI label' },
+    })
+    expect(leftover.isError).toBe(false)
   })
 
   it('falls back to the tool name when the program has no line to show', async () => {
