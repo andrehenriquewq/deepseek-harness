@@ -92,7 +92,7 @@ export interface SubagentCapabilities {
 
 /**
  * What a caller asks for when starting a ONE-SHOT subagent. The tool layer
- * builds this from the model's `{ description, prompt }` plus its own config;
+ * builds this from the model's `prompt` plus its own config;
  * the service validates {@link SubagentCapabilities} against the named provider
  * and resolves the durable descriptor before dispatching to
  * {@link SubagentProvider.start}.

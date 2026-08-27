@@ -1494,10 +1494,6 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
 {
   "type": "object",
   "properties": {
-    "description": {
-      "type": "string",
-      "description": "A short (3-5 word) description of the delegated task, for display."
-    },
     "prompt": {
       "type": "string",
       "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
@@ -1508,7 +1504,6 @@ Delegate a self-contained task to a subagent (a separate agent that works in its
     }
   },
   "required": [
-    "description",
     "prompt"
   ]
 }

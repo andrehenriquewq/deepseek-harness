@@ -1500,10 +1500,6 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 {
   "type": "object",
   "properties": {
-    "description": {
-      "type": "string",
-      "description": "A short (3-5 word) description of the delegated task, for display."
-    },
     "prompt": {
       "type": "string",
       "description": "The complete, self-contained task for the subagent. It does not share this conversation's context, so include everything it needs."
@@ -1514,7 +1510,6 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
     }
   },
   "required": [
-    "description",
     "prompt"
   ]
 }

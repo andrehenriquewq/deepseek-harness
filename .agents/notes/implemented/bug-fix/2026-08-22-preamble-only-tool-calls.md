@@ -65,7 +65,7 @@ The transcript loses the model-authored one-line summary on shell and code calls
 
 The repeat guard counts differently. A deployment that relied on a relabelled repeat resetting the chain now draws reminders sooner, and `ignoredArgumentKeys: []` restores the previous key exactly. A tool whose `description` genuinely changes behavior would be mis-chained by the default and must name itself in `exclude` or clear the key list.
 
-`subagent` and `subagent_fork` still declare a required `description` beside their payload and were left alone: they are dispatch tools whose summary is the subagent's own label, not decoration. They remain exposed to the stub, and the repair directive is what covers them.
+`subagent` and `subagent_fork` kept a required `description` beside their payload when this note shipped: they are dispatch tools whose summary is the subagent's own label, not decoration, so they were left exposed to the stub and the repair directive covered them. The field was removed in a follow-up that derives the label from `prompt` instead — see [2026-08-27-subagent-description-removed](2026-08-27-subagent-description-removed.md).
 
 ## Alternatives considered
 

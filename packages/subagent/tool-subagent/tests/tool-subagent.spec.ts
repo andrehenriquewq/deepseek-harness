@@ -86,7 +86,6 @@ describe('dsh-tool-subagent', () => {
   it('registers a `subagent` tool that delegates to the configured provider and returns its output', async () => {
     const ctx = await setup({ provider: 'mock' }, { reply: 'child says hi' })
     const result = await callSubagent(ctx, {
-      description: 'do a thing',
       prompt: 'go research X',
       run_in_background: false,
     })
@@ -100,12 +99,12 @@ describe('dsh-tool-subagent', () => {
     expect(text(result)).toBe('child says hi')
   })
 
-  it('exposes description + prompt + run_in_background to the model (no provider/type parameter)', async () => {
+  it('exposes prompt + run_in_background to the model (no provider/type parameter)', async () => {
     const ctx = await setup({ provider: 'mock' })
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')
     expect(schema).toBeDefined()
     const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['description', 'prompt', 'run_in_background'])
+    expect(Object.keys(props).sort()).toEqual(['prompt', 'run_in_background'])
     expect(schema!.description).toContain('job_output')
   })
 
@@ -113,7 +112,7 @@ describe('dsh-tool-subagent', () => {
     const ctx = await setup({ provider: 'mock', enableRunInBackground: false })
     const schema = ctx.tools.schemas().find(s => s.name === 'subagent')
     const props = (schema!.parameters as { properties?: Record<string, unknown> }).properties ?? {}
-    expect(Object.keys(props).sort()).toEqual(['description', 'prompt'])
+    expect(Object.keys(props).sort()).toEqual(['prompt'])
     expect(schema!.description).not.toContain('job_output')
   })
 
@@ -123,12 +122,12 @@ describe('dsh-tool-subagent', () => {
     const ctx = await setup({ provider: 'mock', enableRunInBackground: false })
     const parent = { id: SessionId('sess-off'), inject: () => {}, options: {}, session: { header: { version: 0, id: 'sess-off', createdAt: 0 } } } as unknown as Agent
 
-    const forced = await callSubagent(ctx, { description: 'd', prompt: 'p', run_in_background: true }, { agent: parent })
+    const forced = await callSubagent(ctx, { prompt: 'p', run_in_background: true }, { agent: parent })
     expect(forced.isError).toBe(true)
     expect(text(forced)).toContain('run_in_background is disabled for this tool instance')
     // The provider was never asked to start a child.
     expect(ctx.subagents.getProvider('mock')).toBeDefined()
-    const foreground = await callSubagent(ctx, { description: 'd', prompt: 'p' }, { agent: parent })
+    const foreground = await callSubagent(ctx, { prompt: 'p' }, { agent: parent })
     expect(foreground.isError).toBe(false)
   })
 
@@ -138,13 +137,13 @@ describe('dsh-tool-subagent', () => {
       signal: testToolSignal,
       callId: CallId('subagent-foreground'),
       name: 'subagent',
-      arguments: { description: 'do work', prompt: 'Reply OK' },
+      arguments: { prompt: 'Reply OK' },
     })).toEqual({ kind: 'parallel' })
     expect(ctx.tools.executionMode({
       signal: testToolSignal,
       callId: CallId('subagent-background'),
       name: 'subagent',
-      arguments: { description: 'do work', prompt: 'Reply OK', run_in_background: true },
+      arguments: { prompt: 'Reply OK', run_in_background: true },
     })).toEqual({ kind: 'parallel' })
   })
 
@@ -163,11 +162,52 @@ describe('dsh-tool-subagent', () => {
       },
     })
     const results = await Promise.all([
-      callSubagent(ctx, { description: 'first', prompt: 'p1' }),
-      callSubagent(ctx, { description: 'second', prompt: 'p2' }),
+      callSubagent(ctx, { prompt: 'first' }),
+      callSubagent(ctx, { prompt: 'second' }),
     ])
     expect(started.sort()).toEqual(['first', 'second'])
     for (const result of results) expect(result.isError).toBe(false)
+  })
+
+  it('derives the delegation label from the prompt (first non-blank line, elided when long, fallback to toolName)', async () => {
+    const cases: Array<{ prompt: string; expected: string }> = [
+      { prompt: 'single-line task', expected: 'single-line task' },
+      { prompt: '\n\nfirst line\nsecond line', expected: 'first line' },
+      { prompt: '   trimmed leading whitespace\nrest', expected: 'trimmed leading whitespace' },
+      { prompt: 'x'.repeat(80), expected: 'x'.repeat(71) + '\u2026' },
+      { prompt: '   ', expected: 'subagent' },
+      { prompt: '', expected: 'subagent' },
+    ]
+    const captureCtx = new Context()
+    await captureCtx.plugin(SystemPrompt)
+    await captureCtx.plugin(ToolRuntime)
+    await captureCtx.plugin(SubagentRuntime)
+    const seen: string[] = []
+    captureCtx.subagents.registerProvider({
+      name: 'label-capture',
+      capabilities: { outputSchema: false, depthLimit: false, toolFilter: false, persona: false },
+      inheritsParentContext: false,
+      start: async (request) => {
+        seen.push(request.label ?? '(unlabeled)')
+        return {
+          id: SessionId(`label-child-${seen.length}`),
+          localAgent: undefined,
+          result: Promise.resolve({ output: [{ type: 'text', text: 'ok' }], stopReason: 'completed' as const }),
+          dispose: async () => {},
+        }
+      },
+    })
+    await captureCtx.plugin(tool, { provider: 'label-capture', toolName: 'subagent', maxDepth: 'provider-managed' })
+    for (const { prompt } of cases) {
+      await captureCtx.tools.execute({
+        signal: testToolSignal,
+        callId: CallId(`label-${seen.length}`),
+        name: 'subagent',
+        arguments: { prompt },
+        agent: fakeAgent(),
+      })
+    }
+    expect(seen).toEqual(cases.map(c => c.expected))
   })
 
   it.each([
@@ -177,7 +217,7 @@ describe('dsh-tool-subagent', () => {
     { stopReason: 'refusal' as const, fragment: 'declined' },
   ])('maps stop reason $stopReason to an isError result (not partial success)', async ({ stopReason, fragment }) => {
     const ctx = await setup({ provider: 'mock' }, { stopReason })
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain(fragment)
     // The failure is not partial success, but the child's preserved partial
@@ -192,7 +232,7 @@ describe('dsh-tool-subagent', () => {
       stopReason: 'error',
     })
 
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(result.isError).toBe(true)
     expect(text(result)).toBe(
       'Error: subagent run failed\n'
@@ -217,8 +257,8 @@ describe('dsh-tool-subagent', () => {
     const names = ctx.tools.schemas().map(s => s.name).filter(n => n.startsWith('subagent')).sort()
     expect(names).toEqual(['subagent', 'subagent_acp'])
 
-    const viaSpawn = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('c-spawn'), name: 'subagent', arguments: { description: 'd', prompt: 'p' }, agent: fakeAgent() })
-    const viaAcp = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('c-acp'), name: 'subagent_acp', arguments: { description: 'd', prompt: 'p' }, agent: fakeAgent() })
+    const viaSpawn = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('c-spawn'), name: 'subagent', arguments: { prompt: 'p' }, agent: fakeAgent() })
+    const viaAcp = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('c-acp'), name: 'subagent_acp', arguments: { prompt: 'p' }, agent: fakeAgent() })
     expect(text(viaSpawn)).toBe('from spawn')
     expect(text(viaAcp)).toBe('from acp')
   })
@@ -243,7 +283,7 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, { provider: 'weird', maxDepth: 'provider-managed' })
 
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('abnormally')
   })
@@ -272,7 +312,7 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, { provider: 'capture', agentOptions: { model: 'child-model' }, maxDepth: 'provider-managed' })
 
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(seen?.agentOptions).toEqual({ model: 'child-model' })
   })
 
@@ -305,13 +345,13 @@ describe('dsh-tool-subagent', () => {
     await new Promise(r => setTimeout(r, 10))
 
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(true)
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(seen?.agentOptions).toBeUndefined()
   })
 
   it('fails loud when invoked without a calling agent', async () => {
     const ctx = await setup({ provider: 'mock' })
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' }, { agent: undefined })
+    const result = await callSubagent(ctx, { prompt: 'p' }, { agent: undefined })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('requires a calling agent')
   })
@@ -329,7 +369,7 @@ describe('dsh-tool-subagent', () => {
     // Backend arrives (as a delayed sibling fiber would): the tool appears.
     await mock.mountScriptedProvider(ctx, { name: 'mock', reply: 'late but fine' })
     expect(ctx.tools.schemas().some(s => s.name === 'subagent')).toBe(true)
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(text(result)).toBe('late but fine')
   })
 
@@ -458,7 +498,7 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, { provider: 'spy', maxDepth: 'provider-managed' })
 
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(disposed).toHaveBeenCalledTimes(1)
   })
 
@@ -481,7 +521,7 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, { provider: 'spy', maxDepth: 'provider-managed' })
 
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(result.isError).toBe(true)
     expect(disposed).toHaveBeenCalledTimes(1)
   })
@@ -508,7 +548,7 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, { provider: 'spy', maxDepth: 'provider-managed' })
 
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('published run failed')
     expect(text(result)).toContain('published handle disposal failed')
@@ -536,7 +576,7 @@ describe('dsh-tool-subagent', () => {
     })
     await ctx.plugin(tool, { provider: 'spy', maxDepth: 'provider-managed' })
 
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    const result = await callSubagent(ctx, { prompt: 'p' })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('published handle disposal failed')
   })
@@ -570,7 +610,7 @@ describe('dsh-tool-subagent', () => {
     await ctx.plugin(tool, { provider: 'spy', maxDepth: 'provider-managed' })
 
     const controller = new AbortController()
-    const pending = callSubagent(ctx, { description: 'd', prompt: 'p' }, { signal: controller.signal })
+    const pending = callSubagent(ctx, { prompt: 'p' }, { signal: controller.signal })
     // Let provider.start install its listener before aborting.
     await Promise.resolve()
     await Promise.resolve()
@@ -599,7 +639,7 @@ describe('dsh-tool-subagent', () => {
 
     const controller = new AbortController()
     controller.abort() // already aborted BEFORE the tool runs
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p' }, { signal: controller.signal })
+    const result = await callSubagent(ctx, { prompt: 'p' }, { signal: controller.signal })
     expect(sawAborted).not.toHaveBeenCalled()
     expect(result.isError).toBe(true)
     expect(result.error).toEqual({
@@ -671,7 +711,7 @@ describe('dsh-tool-subagent', () => {
       maxDepth: 2,
     })
 
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(seen?.persona).toBe('You are the child.')
     expect(seen?.toolFilter).toMatchObject({ deny: ['subagent'] })
     expect(seen?.maxDepth).toBe(2)
@@ -722,7 +762,7 @@ describe('dsh-tool-subagent', () => {
       },
     })
     await ctx.plugin(tool, { provider: 'capture3', toolFilter: { deny: ['subagent'] }, maxDepth: 'provider-managed' })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(seen?.toolFilter).toEqual({ deny: ['subagent'] })
     expect(seen?.toolFilter).not.toHaveProperty('allow')
   })
@@ -752,7 +792,7 @@ describe('dsh-tool-subagent', () => {
       },
     })
     await ctx.plugin(tool, { provider: 'capture4', maxDepth: 'provider-managed' })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(seen).toBeDefined()
     expect(seen).not.toHaveProperty('agentOptions')
   })
@@ -830,7 +870,7 @@ describe('dsh-tool-subagent background mode', () => {
       signal: testToolSignal,
       callId: CallId('resumable-one-shot'),
       name: 'subagent_resumable',
-      arguments: { description: 'work', prompt: 'go', run_in_background: true },
+      arguments: { prompt: 'go', run_in_background: true },
       agent: parent,
     })
 
@@ -842,7 +882,7 @@ describe('dsh-tool-subagent background mode', () => {
     const ctx = await backgroundSetup({ provider: 'mock', agentOptions: { model: 'child-model' } }, { reply: 'background answer' })
     const parent = ownerAgent(ctx, 'sess-parent')
 
-    const start = await callSubagent(ctx, { description: 'deep research', prompt: 'dig in', run_in_background: true }, { agent: parent })
+    const start = await callSubagent(ctx, { prompt: 'dig in', run_in_background: true }, { agent: parent })
     expect(start.isError).toBe(false)
     if (start.isError) throw new Error('expected background subagent success')
     expect(start.value).toEqual({ kind: 'background', jobId: 'subagent-1' })
@@ -880,7 +920,7 @@ describe('dsh-tool-subagent background mode', () => {
       signal: testToolSignal,
       callId: CallId('diagnostic-background-start'),
       name: 'subagent',
-      arguments: { description: 'd', prompt: 'p', run_in_background: true },
+      arguments: { prompt: 'p', run_in_background: true },
       agent: parent,
     })
     expect(text(started)).toBe('started background subagent job subagent-1')
@@ -900,7 +940,7 @@ describe('dsh-tool-subagent background mode', () => {
 
   it('fails loud when the tasks runtime is not loaded', async () => {
     const ctx = await setup({ provider: 'mock' })
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p', run_in_background: true })
+    const result = await callSubagent(ctx, { prompt: 'p', run_in_background: true })
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('background jobs unavailable: load @deepseek-ai/dsh-jobs')
   })
@@ -910,7 +950,7 @@ describe('dsh-tool-subagent background mode', () => {
     const parent = ownerAgent(ctx, 'sess-parent')
     const controller = new AbortController()
     controller.abort()
-    const result = await callSubagent(ctx, { description: 'd', prompt: 'p', run_in_background: true }, { agent: parent, signal: controller.signal })
+    const result = await callSubagent(ctx, { prompt: 'p', run_in_background: true }, { agent: parent, signal: controller.signal })
     expect(result.isError).toBe(true)
     expect(result.error).toEqual({
       message: 'tool call aborted before dispatch',
@@ -934,7 +974,7 @@ describe('dsh-tool-subagent background mode', () => {
       signal: testToolSignal,
       callId: CallId('broken-start'),
       name: 'subagent_broken',
-      arguments: { description: 'broken', prompt: 'p', run_in_background: true },
+      arguments: { prompt: 'p', run_in_background: true },
       agent: parent,
     })
     expect(text(started)).toBe('started background subagent job subagent-1')
@@ -965,7 +1005,7 @@ describe('dsh-tool-subagent background mode', () => {
       signal: testToolSignal,
       callId: CallId('pending-start'),
       name: 'subagent_pending',
-      arguments: { description: 'pending', prompt: 'p', run_in_background: true },
+      arguments: { prompt: 'p', run_in_background: true },
       agent: parent,
     })
     await ctx.tools.execute({
@@ -1007,7 +1047,7 @@ describe('dsh-tool-subagent background mode', () => {
       signal: testToolSignal,
       callId: CallId('broken-rollback-start'),
       name: 'subagent_broken_rollback',
-      arguments: { description: 'broken rollback', prompt: 'p', run_in_background: true },
+      arguments: { prompt: 'p', run_in_background: true },
       agent: parent,
     })
     await ctx.tools.execute({
@@ -1056,8 +1096,8 @@ describe('dsh-tool-subagent background mode', () => {
     // Direct apply preserves omitted agentOptions instead of applying schema defaults.
     tool.apply(ctx, { provider: 'hanging', toolName: 'subagent_hang' })
 
-    const startOne = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('h1'), name: 'subagent_hang', arguments: { description: 'one', prompt: 'p', run_in_background: true }, agent: parent })
-    const startTwo = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('h2'), name: 'subagent_hang', arguments: { description: 'two', prompt: 'p', run_in_background: true }, agent: parent })
+    const startOne = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('h1'), name: 'subagent_hang', arguments: { prompt: 'one', run_in_background: true }, agent: parent })
+    const startTwo = await ctx.tools.execute({ signal: testToolSignal, callId: CallId('h2'), name: 'subagent_hang', arguments: { prompt: 'two', run_in_background: true }, agent: parent })
     expect(text(startOne)).toBe('started background subagent job subagent-1')
     expect(text(startTwo)).toBe('started background subagent job subagent-2')
 
@@ -1106,7 +1146,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
       signal: testToolSignal,
       callId: CallId('subagent-continuable'),
       name: 'subagent',
-      arguments: { description: 'do work', prompt: 'Reply OK' },
+      arguments: { prompt: 'Reply OK' },
     })).toEqual({ kind: 'parallel' })
   })
 
@@ -1130,7 +1170,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
 
     const started = await callSubagent(
       ctx,
-      { description: 'continuable work', prompt: 'dig in' },
+      { prompt: 'dig in' },
       { agent: parent },
     )
     expect(started.isError).toBe(false)
@@ -1162,7 +1202,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
     const { ctx, parent } = await continuableSetup()
     const result = await callSubagent(
       ctx,
-      { description: 'blocking work', prompt: 'dig in', run_in_background: false },
+      { prompt: 'dig in', run_in_background: false },
       { agent: parent },
     )
     expect(result.isError).toBe(false)
@@ -1201,11 +1241,11 @@ describe('dsh-tool-subagent continuable background mode', () => {
       maxDepth: 3,
     })
 
-    const execute = (callId: string, description: string, signal: AbortSignal) => ctx.tools.execute({
+    const execute = (callId: string, prompt: string, signal: AbortSignal) => ctx.tools.execute({
       signal,
       callId: CallId(callId),
       name: 'subagent_gated',
-      arguments: { description, prompt: 'work', run_in_background: true },
+      arguments: { prompt, run_in_background: true },
       agent: parent,
     })
     const cancelledResult = execute('continuable-cancelled', 'cancelled sibling', cancelled.signal)
@@ -1275,7 +1315,7 @@ describe('background preflight failure (no orphaned child, by construction)', ()
       signal: testToolSignal,
       callId: CallId('probe-1'),
       name: 'subagent_probe',
-      arguments: { description: 'd', prompt: 'p', run_in_background: true },
+      arguments: { prompt: 'p', run_in_background: true },
       agent: parent,
     })
     expect(result.isError).toBe(true)
@@ -1313,15 +1353,15 @@ describe('depth budget configuration', () => {
 
   it('defaults maxDepth to 3 and forwards it in the start request', async () => {
     const { ctx, requests } = await captureSetup()
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
-    expect(requests[0]?.label).toBe('d')
+    await callSubagent(ctx, { prompt: 'p' })
+    expect(requests[0]?.label).toBe('p')
     expect(requests[0]?.maxDepth).toBe(3)
     expect(requests[0]?.toolFilter).toBeUndefined()
   })
 
   it('forwards an explicit tool filter unchanged instead of encoding the depth policy into it', async () => {
     const { ctx, requests } = await captureSetup({ toolFilter: { deny: ['dangerous'] }, maxDepth: 0 })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(requests[0]?.maxDepth).toBe(0)
     expect(requests[0]?.toolFilter).toEqual({ deny: ['dangerous'] })
   })
@@ -1362,7 +1402,7 @@ describe('depth budget configuration', () => {
       },
     })
     await ctx.plugin(tool, { provider: 'external', maxDepth: 'provider-managed' })
-    await callSubagent(ctx, { description: 'd', prompt: 'p' })
+    await callSubagent(ctx, { prompt: 'p' })
     expect(requests[0]?.maxDepth).toBeUndefined()
     expect(requests[0]?.toolFilter).toBeUndefined()
   })

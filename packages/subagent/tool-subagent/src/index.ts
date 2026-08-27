@@ -25,6 +25,30 @@ export const inject = ['tools', 'subagents', 'systemPrompt']
 /** Prompt order after bounded delegation policy and before child reporting. */
 const SUBAGENT_SECTION_ORDER = 116.5
 
+/**
+ * Maximum length of the derived delegation label, mirroring
+ * `RUN_CODE_TITLE_MAX_LENGTH` so sibling dispatch tools present one-line
+ * summaries of similar density.
+ */
+const SUBAGENT_LABEL_MAX_LENGTH = 72
+
+/**
+ * Derive the delegation label from the task prompt, mirroring `runCodeTitle`:
+ * the first non-blank line, elided when long, falling back to the tool name
+ * when the prompt is whitespace-only so the continuable contract (`label:
+ * string`) stays satisfied without a model-authored summary field.
+ * @param prompt - the model-authored task prompt (always present; required by the schema).
+ * @param fallback - the tool name, used when the prompt carries no usable line.
+ * @returns the delegation label for the child session and any background job.
+ */
+function subagentLabel(prompt: string, fallback: string): string {
+  const first = prompt.split('\n').map(line => line.trim()).find(line => line.length > 0)
+  if (first === undefined) return fallback
+  return first.length > SUBAGENT_LABEL_MAX_LENGTH
+    ? `${first.slice(0, SUBAGENT_LABEL_MAX_LENGTH - 1)}\u2026`
+    : first
+}
+
 /** Config: which registered provider this tool delegates to, plus child defaults. */
 export interface Config {
   /** The `ctx.subagents` provider name to start runs on (e.g. `spawn`, `acp`). */
@@ -215,7 +239,7 @@ async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResu
  * @param inheritsConversation - whether the child's conversation is seeded
  *   with the parent's completed turns; this says nothing about tool, service,
  *   scope, or authority inheritance.
- * @returns the tool `description` and the `prompt` parameter description.
+ * @returns the tool description and the `prompt` parameter description.
  */
 function providerWording(inheritsConversation: boolean): { description: string; promptDescription: string } {
   if (inheritsConversation) {
@@ -314,11 +338,6 @@ export function apply(ctx: Context, config: Config): void {
           : ' This call waits for the result by default. Set `run_in_background: true` to return a job id; collect with `job_output` and stop with `job_kill`.'
         : ' This call waits for the subagent and returns its result.'),
       parameters: {
-        description: {
-          type: 'string',
-          required: true,
-          description: 'A short (3-5 word) description of the delegated task, for display.',
-        },
         prompt: {
           type: 'string',
           required: true,
@@ -383,8 +402,9 @@ export function apply(ctx: Context, config: Config): void {
         }
 
         const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
+        const label = subagentLabel(args.prompt, toolName)
         const request = {
-          label: args.description,
+          label,
           prompt: [{ type: 'text', text: args.prompt }] as ContentBlock[],
           parent,
           ...config.agentOptions !== undefined ? { agentOptions: config.agentOptions } : {},
@@ -400,7 +420,7 @@ export function apply(ctx: Context, config: Config): void {
             // there, so this call neither waits for nor collects a result.
             const started = await ctx.subagents.startContinuable({
               provider: config.provider,
-              label: args.description,
+              label,
               request,
               signal: exec.signal,
             })
@@ -414,7 +434,7 @@ export function apply(ctx: Context, config: Config): void {
           // starter can spawn, and the task-owned signal covers startup.
           const id = jobs.start({
             kind: 'subagent',
-            label: args.description,
+            label,
             owner: parent,
             run: () => {
               const controller = new AbortController()

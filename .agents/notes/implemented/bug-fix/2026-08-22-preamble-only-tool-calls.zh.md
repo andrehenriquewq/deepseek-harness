@@ -65,7 +65,7 @@ Status: implemented
 
 重复守卫的计数方式发生了变化。此前依赖「换标签即重置链」的部署，现在会更早收到提醒；`ignoredArgumentKeys: []` 可精确恢复原先的链键。若某个工具的 `description` 确实会改变行为，默认设置会让它的链归类错误，需要在 `exclude` 中点名该工具，或清空该键列表。
 
-`subagent` 与 `subagent_fork` 仍在载荷旁声明必填的 `description`，本次未作改动：它们是派发类工具，那段摘要就是子 agent 自身的标签，而非装饰。它们仍然可能出现残缺调用，由修复指令负责兜底。
+本 Note 发布时，`subagent` 与 `subagent_fork` 仍在载荷旁保留必填的 `description`，本次未作改动：它们是派发类工具，那段摘要就是子 agent 自身的标签，而非装饰，因此仍可能产生残缺调用，由修复指令负责兜底。该字段在后续一次改动中被移除，改为从 `prompt` 派生 label——详见 [2026-08-27-subagent-description-removed](2026-08-27-subagent-description-removed.zh.md)。
 
 ## 备选方案
 

@@ -86,23 +86,23 @@ describe('product-provider public Loader composition', () => {
       tools: [
         {
           name: 'subagent_codex',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
-          required: ['description', 'prompt'],
+          parameterNames: ['prompt', 'run_in_background'],
+          required: ['prompt'],
         },
         {
           name: 'subagent_claude_code',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
-          required: ['description', 'prompt'],
+          parameterNames: ['prompt', 'run_in_background'],
+          required: ['prompt'],
         },
         {
           name: 'subagent_claude_primary',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
-          required: ['description', 'prompt'],
+          parameterNames: ['prompt', 'run_in_background'],
+          required: ['prompt'],
         },
         {
           name: 'subagent_claude_secondary',
-          parameterNames: ['description', 'prompt', 'run_in_background'],
-          required: ['description', 'prompt'],
+          parameterNames: ['prompt', 'run_in_background'],
+          required: ['prompt'],
         },
       ],
       jobTools: ['job_kill', 'job_list', 'job_output'],
